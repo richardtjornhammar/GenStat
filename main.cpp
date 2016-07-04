@@ -18,6 +18,13 @@
 #include <gsl/gsl_linalg.h>
 #include <gsl/gsl_permutation.h>
 
+//	XTC	STUFF
+#include <time.h>
+#include <float.h>
+#include "xdrfile/xdrfile.h"
+#include "xdrfile/xdrfile_trr.h"
+#include "xdrfile/xdrfile_xtc.h"
+
 //	SIZE OF D IS 10E-11 to 10E-10 m2/s FOR BIOMOLECULES
 //	DIFF EQ:: d/dt(phi) = D d^2/dt^2(phi)	FICKS SECOND
 //
@@ -27,6 +34,7 @@
 #define NAVO	6.022140857E23		//
 
 // COMPILE:: g++ -std=c++11 main.cpp -lmmdb -lgsl -lblas -o rich_dyn
+// WXTC	  :: g++ -std=c++11 src/*.cpp -lmmdb -lgsl -lblas -lxdrfile -o rich_dyn
 
 std::pair< int , std::vector< std::string > >
 argparser( std::pair < int, char ** > mp, std::vector < std::pair < int, std::pair<std::string, std::string > > > opts_n_defaults ) {
@@ -95,6 +103,189 @@ fatal(void){
 	exit(1);
 }
 
+void
+fatal( std::string errstr ){
+	std::string	author("Richard Tjörnhammar (e-mail: richard.tjornhammar@gmail.com)");
+	std::cout << "INFO:: PROGRAM FAILED" << std::endl;
+	std::cout << "INFO:: " << errstr << std::endl;
+	std::cout << "PLEASE CONTACT " << author << "\nWITH ANY QUESTIONS REGARDING THE FUNCTIONALITY" << std::endl;
+	exit(1);
+}
+
+void
+die( std::string errstr ){
+	fatal(errstr);
+}
+/*
+static void write_atoms_to_xtc( PPCAtom *cur_atoms, int nAtoms, std::string fname ) 
+{
+	std::string testfn(fname);
+	char *testncfstr = new char[testfn.length() + 1];
+	strcpy(testncfstr, testfn.c_str());
+
+	XDRFILE *xd;
+	int result,i,j,k,nframes=13;
+	int natoms2,natoms1=173;
+	int step2,step1=1993;
+	float time2,time1=1097.23;
+	matrix box2,box1;
+	rvec *x2,*x1;
+	float prec2,prec1=1000;
+	float toler=1e-3;
+	
+	printf("INFO:: TESTING XTC FUNCTIONALITY \t");
+	for(i=0; (i<DIM); i++)
+		for(j=0; (j<DIM); j++)
+			box1[i][j] = (i+1)*3.7 + (j+1);
+	x1 = (float (*)[3]) calloc(natoms2, sizeof(*x1) );
+	if (NULL == x1)
+		die("Allocating memory for x1 in test_xtc");
+	
+	for(i=0; (i<natoms1); i++)
+		for(j=0; (j<DIM); j++)
+			x1[i][j] = (i+1)*3.7 + (j+1);
+	xd = xdrfile_open(testfn.c_str(),"w");
+	if (NULL == xd)
+		die("Opening xdrfile for writing");
+	for(k=0; (k<nframes); k++)
+		{
+			result = write_xtc(xd,natoms1,step1+k,time1+k,box1,x1,prec1);
+			if (0 != result)
+				die("Writing xtc file");
+		}
+	xdrfile_close(xd);
+	
+	result = read_xtc_natoms( testncfstr , &natoms2 );
+	if (exdrOK != result)
+		die("read_xtc_natoms");
+	if (natoms2 != natoms1)
+		die("Number of atoms incorrect when reading trr");
+	x2 = (float (*)[3]) calloc(natoms2, sizeof(*x2) );
+	if (NULL == x2)
+		die("Allocating memory for x2");
+		
+	xd = xdrfile_open(testfn.c_str(),"r");
+	if (NULL == xd)
+		die("Opening xdrfile for reading");
+	
+	k = 0;
+	do
+		{
+			result = read_xtc(xd,natoms2,&step2,&time2,box2,x2,&prec2);
+			if (exdrENDOFFILE != result)
+				{
+					if (exdrOK != result)
+						die("read_xtc");
+					if (natoms2 != natoms1)
+						die("natoms2 != natoms1");
+					if (step2-step1 != k)
+						die("incorrect step");
+					if (fabs(time2-time1-k) > toler)
+						die("incorrect time");
+					if (fabs(prec2-prec1) > toler)
+						die("incorrect precision");
+					for(i=0; (i<DIM); i++)
+						for(j=0; (j<DIM); j++)
+							if (fabs(box2[i][j] - box1[i][j]) > toler)
+								die("box incorrect");
+					for(i=0; (i<natoms1); i++)
+						for(j=0; (j<DIM); j++)
+							if (fabs(x2[i][j] - x1[i][j]) > toler)
+								die("x incorrect");
+				}
+			k++;
+		} while (result == exdrOK);
+		
+	xdrfile_close(xd);
+
+	printf("[ PASSED ]\n");
+}
+*/
+static void test_xtc()
+{
+	std::string testfn("test.xtc");
+	char *testncfstr = new char[testfn.length() + 1];
+	strcpy(testncfstr, testfn.c_str());
+
+	XDRFILE *xd;
+	int result,i,j,k,nframes=13;
+	int natoms2,natoms1=173;
+	int step2,step1=1993;
+	float time2,time1=1097.23;
+	matrix box2,box1;
+	rvec *x2,*x1;
+	float prec2,prec1=1000;
+	float toler=1e-3;
+	
+	printf("INFO:: TESTING XTC FUNCTIONALITY \t");
+	for(i=0; (i<DIM); i++)
+		for(j=0; (j<DIM); j++)
+			box1[i][j] = (i+1)*3.7 + (j+1);
+	x1 = (float (*)[3]) calloc(natoms2, sizeof(*x1) );
+	if (NULL == x1)
+		die("Allocating memory for x1 in test_xtc");
+	
+	for(i=0; (i<natoms1); i++)
+		for(j=0; (j<DIM); j++)
+			x1[i][j] = (i+1)*3.7 + (j+1);
+	xd = xdrfile_open(testfn.c_str(),"w");
+	if (NULL == xd)
+		die("Opening xdrfile for writing");
+	for(k=0; (k<nframes); k++)
+		{
+			result = write_xtc(xd,natoms1,step1+k,time1+k,box1,x1,prec1);
+			if (0 != result)
+				die("Writing xtc file");
+		}
+	xdrfile_close(xd);
+	
+	result = read_xtc_natoms( testncfstr , &natoms2 );
+	if (exdrOK != result)
+		die("read_xtc_natoms");
+	if (natoms2 != natoms1)
+		die("Number of atoms incorrect when reading trr");
+	x2 = (float (*)[3]) calloc(natoms2, sizeof(*x2) );
+	if (NULL == x2)
+		die("Allocating memory for x2");
+		
+	xd = xdrfile_open(testfn.c_str(),"r");
+	if (NULL == xd)
+		die("Opening xdrfile for reading");
+	
+	k = 0;
+	do
+		{
+			result = read_xtc(xd,natoms2,&step2,&time2,box2,x2,&prec2);
+			if (exdrENDOFFILE != result)
+				{
+					if (exdrOK != result)
+						die("read_xtc");
+					if (natoms2 != natoms1)
+						die("natoms2 != natoms1");
+					if (step2-step1 != k)
+						die("incorrect step");
+					if (fabs(time2-time1-k) > toler)
+						die("incorrect time");
+					if (fabs(prec2-prec1) > toler)
+						die("incorrect precision");
+					for(i=0; (i<DIM); i++)
+						for(j=0; (j<DIM); j++)
+							if (fabs(box2[i][j] - box1[i][j]) > toler)
+								die("box incorrect");
+					for(i=0; (i<natoms1); i++)
+						for(j=0; (j<DIM); j++)
+							if (fabs(x2[i][j] - x1[i][j]) > toler)
+								die("x incorrect");
+				}
+			k++;
+		} while (result == exdrOK);
+		
+	xdrfile_close(xd);
+
+	printf("[ PASSED ]\n");
+}
+
+
 int main ( int argc, char ** argv ) {
 	int verbose = 0;
 
@@ -116,6 +307,12 @@ int main ( int argc, char ** argv ) {
 	vipss.first=0;	vipss.second.first = "-verbose";
 			vipss.second.second = "0";
 	opts_n_defaults.push_back(vipss);
+
+	/* Now test writing a complete xtc file */
+	test_xtc();
+
+	if(argc<2)
+		fatal("NOT ENOUGH ARGUMENTS");
 
 //	EXECUTING ARGPARSE
 	std::pair<int, std::vector< std::string > > run_args = argparser( margs, opts_n_defaults );
@@ -186,7 +383,7 @@ int main ( int argc, char ** argv ) {
 		stationary_dist  [imod][0] = 0.0;
 		stationary_dist  [imod][1] = 0.0;
 		for ( jmod=imod ; jmod<nModels ; jmod++ ) {
-			double X = 0.0, X2 = 0.0,Nc = 0.0;
+			double X = 0.0, X2 = 0.0, Nc = 0.0;
 			//	NOTE THAT TWO MODELS CAN HAVE DIFFERENT AMOUNT OF ATOMS
 			//	ONLY USE THE ATOMS THAT ARE UNIQUELY DETERMINED IN BOTH
 			//	SETS
