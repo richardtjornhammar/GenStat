@@ -38,19 +38,21 @@ void output_matrix( gsl_matrix * );
 // COMPILE:: g++ -std=c++11 main.cpp -lmmdb -lgsl -lblas -o rich_dyn
 // WXTC	  :: g++ -std=c++11 src/*.cpp -lmmdb -lgsl -lblas -lxdrfile -o rich_dyn
 
+
 std::pair< int , std::vector< std::string > >
-argparser( std::pair < int, char ** > mp, std::vector < std::pair < int, std::pair<std::string, std::string > > > opts_n_defaults ) {
+argparser( std::pair < int, char ** > mp, std::vector<int>& v_set, 
+	std::vector < std::pair < int, std::pair<std::string, std::string > > > opts_n_defaults ) {
 	// ARGS OUTPUT ORDER CORRESPONDS TO OPTS_N_DEFAULTS FIRST VALUE
 	std::vector< std::string > args;
 	std::pair  < int, std::vector< std::string > > ret_args;
-	std::vector< int > v_set;
+	//std::vector< int > v_set;
 
 	for( int i=0 ; i<mp.first ; i++ ) {
 		args.push_back			( mp.second[i] );
 	}
 	for( int i=0 ; i<opts_n_defaults.size() ; i++ ) {
 		ret_args.second.push_back	( opts_n_defaults[i].second.second );
-		v_set.push_back(0);
+		//v_set.push_back(0);
 	}
 	// COMMAND INPUT
 	int arg 	= 0 ;
@@ -90,9 +92,10 @@ argparser( std::pair < int, char ** > mp, std::vector < std::pair < int, std::pa
 			std::cout << "ERROR::OBLIGATORY ARGUMENTS NOT SET ( MARKED [1] )\n" << std::endl;
 		}
 	}
+	//v_set.swap( vis );
+	//std::cout << " " << v_set.size() << " " << vis.size() << std::endl;
 	return ret_args;
 }
-
 void
 fatal(void){
 	std::string	author("Richard Tjörnhammar (e-mail: richard.tjornhammar@gmail.com)");
@@ -133,7 +136,7 @@ void write_atoms_to_xtc( gsl_matrix *cell , CMMDBManager *mmdb , std::string fpn
 //	HERE BUILD A NEW MMDB MANAGER 
 //	AND OUTPUT FIRST FRAME TO PDB 
 
-	CMMDBManager	mmdb_single; // HOPEFULLY THIS IS A MEMCOPY...
+	CMMDBManager	mmdb_single; 
 	PPCModel	model;
 	int nModels;
 	mmdb -> GetModelTable ( model , nModels );
@@ -158,7 +161,6 @@ void write_atoms_to_xtc( gsl_matrix *cell , CMMDBManager *mmdb , std::string fpn
 		delete cur_atoms[i];
 	mmdb_single . FinishStructEdit();
 	int rval	= mmdb_single.WritePDBASCII( cpstrp );	//	READ PDB
-
 	if(rval!=0) { fatal(); }
 //
 //	GMX COORDINATES ARE IN NM NOT AA
@@ -198,7 +200,7 @@ void write_atoms_to_xtc( gsl_matrix *cell , CMMDBManager *mmdb , std::string fpn
 			die("Writing xtc file");
 	}
 	xdrfile_close(xd);
-// BELOW IS FOR TESTING 
+
 	if( debug ) {
 		int natoms2,step2;
 		rvec *x2;
@@ -264,7 +266,7 @@ void write_atoms_to_xtc( gsl_matrix *cell , CMMDBManager *mmdb , std::string fpn
 }
 
 static void test_xtc()
-{
+{ // GENERATES SOME BOGUS FOR TESTING VISUALIZATION ...
 	std::string testfn("test.xtc");
 	char *testncfstr = new char[testfn.length() + 1];
 	strcpy(testncfstr, testfn.c_str());
@@ -344,7 +346,7 @@ static void test_xtc()
 	printf("[ PASSED ]\n");
 }
 void output_matrix( gsl_matrix *mat) {
-	std::cout << "[========================] " << std::endl;
+	std::cout << "\n[========================] " << std::endl;
 	for(int i=0;i<mat->size1;i++) {
 		for(int j=0;j<mat->size2;j++) {
 			std::cout << " " << gsl_matrix_get(mat,i,j);
@@ -375,7 +377,7 @@ void calc_cell_matrix( gsl_matrix *cell , CMMDBManager   *mmdb ) {
 	double c21=c*(cos(alf)-cos(gam)*cos(bet))/sin(gam);
 	gsl_matrix_set(cell, 2, 0, c*cos(bet) 	);
 	gsl_matrix_set(cell, 2, 1, c21 );
-	gsl_matrix_set(cell, 2, 2, sqrt( c*c*(1-cos(bet)*cos(bet)) - c21 ) );
+	gsl_matrix_set(cell, 2, 2, sqrt( c*c*(1-cos(bet)*cos(bet)) - c21*c21 ) ); //check
 }
 
 int main ( int argc, char ** argv ) {
@@ -387,31 +389,37 @@ int main ( int argc, char ** argv ) {
 
 	std::vector < std::pair < int, std::pair<std::string, std::string > > >	opts_n_defaults;
 	std::pair	< int, std::pair<std::string,std::string > > 		vipss;
-	vipss.first=1;	vipss.second.first = "-ifile"; 
-			vipss.second.second = "i_default.pdb";
+//	WOULD BE BETTER WITH HASH INSTEAD SO WE CAN FORGET THE ORDER...
+	vipss.first=1;	vipss.second.first	= "-ifile"; 
+			vipss.second.second	= "i_default.pdb";
 	opts_n_defaults.push_back(vipss);
-	vipss.first=0;	vipss.second.first = "-ofile"; 
-			vipss.second.second = "o_stationary.pdb";
+	vipss.first=0;	vipss.second.first	= "-ofile"; 
+			vipss.second.second	= "o_stationary.pdb";
 	opts_n_defaults.push_back(vipss);
-	vipss.first=0;	vipss.second.first = "-nsteps";
-			vipss.second.second = "100";
+	vipss.first=0;	vipss.second.first	= "-nsteps";
+			vipss.second.second	= "100";
 	opts_n_defaults.push_back(vipss);
-	vipss.first=0;	vipss.second.first = "-verbose";
-			vipss.second.second = "0";
+	vipss.first=0;	vipss.second.first	= "-verbose";
+			vipss.second.second	= "0";
 	opts_n_defaults.push_back(vipss);
-	vipss.first=0;	vipss.second.first = "-traj";
-			vipss.second.second = "traj.xtc";
+	vipss.first=0;	vipss.second.first	= "-traj";
+			vipss.second.second	= "traj.xtc";
 	opts_n_defaults.push_back(vipss);
-	vipss.first=0;	vipss.second.first = "-frame";
-			vipss.second.second = "frame.pdb";
+	vipss.first=0;	vipss.second.first	= "-frame";
+			vipss.second.second	= "frame.pdb";
 	opts_n_defaults.push_back(vipss);
-
+	vipss.first=0;	vipss.second.first	= "-dt";
+			vipss.second.second	= "1.0";
+	opts_n_defaults.push_back(vipss);
 	// test_xtc();
 	if(argc<2)
 		fatal("NOT ENOUGH ARGUMENTS");
 
 //	EXECUTING ARGPARSE
-	std::pair<int, std::vector< std::string > > run_args = argparser( margs, opts_n_defaults );
+	std::vector<int> v_set;
+	for( int i=0 ; i < opts_n_defaults.size() ; i++ )
+		v_set.push_back(0);
+	std::pair< int , std::vector< std::string > > run_args = argparser( margs, v_set, opts_n_defaults );
 	if(run_args.first) { // FAILED
 		fatal();
 	}
@@ -533,7 +541,6 @@ int main ( int argc, char ** argv ) {
 					<< Wij << std::endl;
 		}
 	}
-
 	// CALCULATE MARKOV MATRIX FROM THE WEIGHTS
 	gsl_vector *col = gsl_vector_calloc(nModels);
 	gsl_vector *row = gsl_vector_calloc(nModels);
@@ -611,7 +618,7 @@ int main ( int argc, char ** argv ) {
 		tot_cnt+=1.0;
 	}
 
-	if( run_args.second[5].length()>0 && run_args.second[4].length() ) {
+	if( v_set[5] || v_set[4] ) {
 		// NOTE THAT THE FIRST FRAME IS SENT TO PDB FOR TOPOLOGY
 		write_atoms_to_xtc( cell , &mmdb , run_args.second[5] , run_args.second[4] , vimnr , 0 );
 	}
@@ -698,47 +705,47 @@ int main ( int argc, char ** argv ) {
 			if(verbose)
 				std::cout << "INFO::" << imodel << " " << nAtoms << std::endl;
 	}
-// FINALLY BUILD THE END MODEL
-// WRITTEN IN A REDUNDANT WAY
-// STAT OUTP IO
-	PPCModel	model_tmp;
-	int Nmods;
-	mmdb.GetModelTable( model_tmp , Nmods );
-	CModel	*model0 = new CModel;
-	model0	-> Copy (  model_tmp[0]	);	// ZEROTH ONE USED FOR TMP STORAGE
-	mmdb	. DeleteAllModels(	);	
-	mmdb	. AddModel ( model0 	);
 
-	int selHnd = mmdb.NewSelection();
-	mmdb.Select (	selHnd  , STYPE_ATOM , 1 , "*",
-				ANY_RES , "*" , ANY_RES,"*" ,
+	if( v_set[1] ) {
+	// FINALLY BUILD THE END MODEL
+	// WRITTEN IN A REDUNDANT WAY
+	// STAT OUTP IO
+		PPCModel	model_tmp;
+		int Nmods;
+		mmdb.GetModelTable( model_tmp , Nmods );
+		CModel	*model0 = new CModel;
+		model0	-> Copy (  model_tmp[0]	);	// ZEROTH ONE USED FOR TMP STORAGE
+		mmdb	. DeleteAllModels(	);	
+		mmdb	. AddModel ( model0 	);
+
+		int selHnd = mmdb.NewSelection();
+		mmdb.Select (	selHnd  , STYPE_ATOM , 1 , "*",
+				ANY_RES , "*" , ANY_RES,"*" ,	
 				"*", "*", "*" , "*", SKEY_NEW );
-	mmdb.Select (	selHnd  , STYPE_ATOM , 1 , "*",
+		mmdb.Select (	selHnd  , STYPE_ATOM , 1 , "*",
 				ANY_RES , "*" , ANY_RES ,"*" ,
 				"HOH", "*", "*" , "*", SKEY_CLR );
-	mmdb.GetSelIndex ( selHnd, cur_atoms, nAtoms );
+		mmdb.GetSelIndex ( selHnd, cur_atoms, nAtoms );
 
-	for(int iatom=0;iatom<nAtoms;iatom++) {
-		double xm = gsl_matrix_get(XM1,iatom,0);
-		double ym = gsl_matrix_get(XM1,iatom,1);
-		double zm = gsl_matrix_get(XM1,iatom,2);
+		for(int iatom=0;iatom<nAtoms;iatom++) {
+			double xm = gsl_matrix_get(XM1,iatom,0);
+			double ym = gsl_matrix_get(XM1,iatom,1);
+			double zm = gsl_matrix_get(XM1,iatom,2);
+	
+			double xs = gsl_matrix_get(XM2,iatom,0);
+			double ys = gsl_matrix_get(XM2,iatom,1);
+			double zs = gsl_matrix_get(XM2,iatom,2);
 
-		double xs = gsl_matrix_get(XM2,iatom,0);
-		double ys = gsl_matrix_get(XM2,iatom,1);
-		double zs = gsl_matrix_get(XM2,iatom,2);
-
-		cur_atoms[iatom]->x=xm;
-		cur_atoms[iatom]->y=ym;
-		cur_atoms[iatom]->z=zm;
+			cur_atoms[iatom]->x=xm;
+			cur_atoms[iatom]->y=ym;
+			cur_atoms[iatom]->z=zm;
 //	looks odd
-		double B = (xs-xm*xm)+(ys-ym*ym)+(zs-zm*zm);
-//		double B = (xs-xm)*(xs-xm)+(ys-ym)*(ys-ym)+(zs-zm)*(zs-zm); // this is wrong... but I forgot why...
+			double B = (xs-xm*xm)+(ys-ym*ym)+(zs-zm*zm);
+//			double B = (xs-xm)*(xs-xm)+(ys-ym)*(ys-ym)+(zs-zm)*(zs-zm); // this is wrong... but I forgot why...
 
 		//std::cout << "INFO::B:: \t "<< iatom << "   " << B << std::endl;
-		cur_atoms[iatom]->tempFactor=B;
-	}
-
-	if( run_args.second[1].length()>0 ) {
+			cur_atoms[iatom]->tempFactor=B;
+		}
 		std::cout << "INFO:: WILL WRITE FILE " << run_args.second[1] << std::endl;
 		int bytes = run_args.second[1].length();
 		char * cpstr	= new char[bytes + 1];
