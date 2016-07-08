@@ -705,47 +705,47 @@ int main ( int argc, char ** argv ) {
 			if(verbose)
 				std::cout << "INFO::" << imodel << " " << nAtoms << std::endl;
 	}
-// FINALLY BUILD THE END MODEL
-// WRITTEN IN A REDUNDANT WAY
-// STAT OUTP IO
-	PPCModel	model_tmp;
-	int Nmods;
-	mmdb.GetModelTable( model_tmp , Nmods );
-	CModel	*model0 = new CModel;
-	model0	-> Copy (  model_tmp[0]	);	// ZEROTH ONE USED FOR TMP STORAGE
-	mmdb	. DeleteAllModels(	);	
-	mmdb	. AddModel ( model0 	);
-
-	int selHnd = mmdb.NewSelection();
-	mmdb.Select (	selHnd  , STYPE_ATOM , 1 , "*",
-				ANY_RES , "*" , ANY_RES,"*" ,
-				"*", "*", "*" , "*", SKEY_NEW );
-	mmdb.Select (	selHnd  , STYPE_ATOM , 1 , "*",
-				ANY_RES , "*" , ANY_RES ,"*" ,
-				"HOH", "*", "*" , "*", SKEY_CLR );
-	mmdb.GetSelIndex ( selHnd, cur_atoms, nAtoms );
-
-	for(int iatom=0;iatom<nAtoms;iatom++) {
-		double xm = gsl_matrix_get(XM1,iatom,0);
-		double ym = gsl_matrix_get(XM1,iatom,1);
-		double zm = gsl_matrix_get(XM1,iatom,2);
-
-		double xs = gsl_matrix_get(XM2,iatom,0);
-		double ys = gsl_matrix_get(XM2,iatom,1);
-		double zs = gsl_matrix_get(XM2,iatom,2);
-
-		cur_atoms[iatom]->x=xm;
-		cur_atoms[iatom]->y=ym;
-		cur_atoms[iatom]->z=zm;
-//	looks odd
-		double B = (xs-xm*xm)+(ys-ym*ym)+(zs-zm*zm);
-//		double B = (xs-xm)*(xs-xm)+(ys-ym)*(ys-ym)+(zs-zm)*(zs-zm); // this is wrong... but I forgot why...
-
-		//std::cout << "INFO::B:: \t "<< iatom << "   " << B << std::endl;
-		cur_atoms[iatom]->tempFactor=B;
-	}
 
 	if( v_set[1] ) {
+	// FINALLY BUILD THE END MODEL
+	// WRITTEN IN A REDUNDANT WAY
+	// STAT OUTP IO
+		PPCModel	model_tmp;
+		int Nmods;
+		mmdb.GetModelTable( model_tmp , Nmods );
+		CModel	*model0 = new CModel;
+		model0	-> Copy (  model_tmp[0]	);	// ZEROTH ONE USED FOR TMP STORAGE
+		mmdb	. DeleteAllModels(	);	
+		mmdb	. AddModel ( model0 	);
+
+		int selHnd = mmdb.NewSelection();
+		mmdb.Select (	selHnd  , STYPE_ATOM , 1 , "*",
+				ANY_RES , "*" , ANY_RES,"*" ,	
+				"*", "*", "*" , "*", SKEY_NEW );
+		mmdb.Select (	selHnd  , STYPE_ATOM , 1 , "*",
+				ANY_RES , "*" , ANY_RES ,"*" ,
+				"HOH", "*", "*" , "*", SKEY_CLR );
+		mmdb.GetSelIndex ( selHnd, cur_atoms, nAtoms );
+
+		for(int iatom=0;iatom<nAtoms;iatom++) {
+			double xm = gsl_matrix_get(XM1,iatom,0);
+			double ym = gsl_matrix_get(XM1,iatom,1);
+			double zm = gsl_matrix_get(XM1,iatom,2);
+	
+			double xs = gsl_matrix_get(XM2,iatom,0);
+			double ys = gsl_matrix_get(XM2,iatom,1);
+			double zs = gsl_matrix_get(XM2,iatom,2);
+
+			cur_atoms[iatom]->x=xm;
+			cur_atoms[iatom]->y=ym;
+			cur_atoms[iatom]->z=zm;
+//	looks odd
+			double B = (xs-xm*xm)+(ys-ym*ym)+(zs-zm*zm);
+//			double B = (xs-xm)*(xs-xm)+(ys-ym)*(ys-ym)+(zs-zm)*(zs-zm); // this is wrong... but I forgot why...
+
+		//std::cout << "INFO::B:: \t "<< iatom << "   " << B << std::endl;
+			cur_atoms[iatom]->tempFactor=B;
+		}
 		std::cout << "INFO:: WILL WRITE FILE " << run_args.second[1] << std::endl;
 		int bytes = run_args.second[1].length();
 		char * cpstr	= new char[bytes + 1];
