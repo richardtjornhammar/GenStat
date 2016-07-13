@@ -26,7 +26,7 @@
 #include "xdrfile/xdrfile_xtc.h"
 
 void output_matrix( gsl_matrix * );
-
+//
 //	SIZE OF D IS 10E-11 to 10E-10 m2/s FOR BIOMOLECULES
 //	DIFF EQ:: d/dt(phi) = D d^2/dt^2(phi)	FICKS SECOND
 //
@@ -118,7 +118,7 @@ die( std::string errstr ){
 	fatal(errstr);
 }
 
-void write_atoms_to_xtc( gsl_matrix *cell , CMMDBManager *mmdb , std::string fpname , std::string ftname, std::vector<int> vimnr, int debug) 
+void write_atoms_to_xtc( gsl_matrix *cell , CMMDBManager *mmdb , std::string fpname , std::string ftname, std::vector<int> vimnr, int debug, double dt) 
 {
 	std::string testfn(ftname);
 	std::string fname(ftname);
@@ -262,7 +262,6 @@ void write_atoms_to_xtc( gsl_matrix *cell , CMMDBManager *mmdb , std::string fpn
 		} while (result == exdrOK);
 		std::cout << " \nALL IS GOOD " << std::endl;
 	}
-//	SHOULD ALSO CHECK THE COORDINATES
 }
 
 static void test_xtc()
@@ -295,12 +294,11 @@ static void test_xtc()
 	xd = xdrfile_open(testfn.c_str(),"w");
 	if (NULL == xd)
 		die("Opening xdrfile for writing");
-	for(k=0; (k<nframes); k++)
-		{
-			result = write_xtc(xd,natoms1,step1+k,time1+k,box1,x1,prec1);
-			if (0 != result)
-				die("Writing xtc file");
-		}
+	for(k=0; (k<nframes); k++) {
+		result = write_xtc(xd,natoms1,step1+k,time1+k,box1,x1,prec1);
+		if (0 != result)
+			die("Writing xtc file");
+	}
 	xdrfile_close(xd);
 	
 	result = read_xtc_natoms( testncfstr , &natoms2 );
@@ -382,7 +380,6 @@ void calc_cell_matrix( gsl_matrix *cell , CMMDBManager   *mmdb ) {
 
 int main ( int argc, char ** argv ) {
 	int verbose = 0;
-
 //	PREPARING ARGPARSER
 	std::pair < int, char ** >	margs;
 	margs.first = argc; margs.second = argv;
@@ -411,6 +408,10 @@ int main ( int argc, char ** argv ) {
 	vipss.first=0;	vipss.second.first	= "-dt";
 			vipss.second.second	= "1.0";
 	opts_n_defaults.push_back(vipss);
+	vipss.first=0;	vipss.second.first	= "-linear";
+			vipss.second.second	= "0";
+	opts_n_defaults.push_back(vipss);
+
 	// test_xtc();
 	if(argc<2)
 		fatal("NOT ENOUGH ARGUMENTS");
@@ -425,7 +426,16 @@ int main ( int argc, char ** argv ) {
 	}
 
 //	HERE WE SHOULD SET SOME INPUT PARAMETERS
-	double dt	= 1.0E-12;				// TRAJECTORY TIMESTEP
+	double dt;
+	if(v_set[6]){
+		dt	= atof(run_args.second[6].c_str())*1E-12;
+	}else{
+		dt	= 1.0E-12;				// TRAJECTORY TIMESTEP
+	}
+	bool bLin=false;
+	if(v_set[7])
+		bLin=true;
+
 	double gen_time	= atof(run_args.second[2].c_str())*dt;
 	std::cout << "INFO:: WILL MIMIC SIMULATION TIME OF "<< gen_time*1E12 << " [ ps ] " << std::endl;
 	verbose		= atoi(run_args.second[3].c_str());
@@ -511,7 +521,7 @@ int main ( int argc, char ** argv ) {
 						for ( ires = 0 ; ires < nResidues1 ; ires++ ) { 
 							mmdb.GetAtomTable    ( imod+1 ,icha ,ires , atoms_T1, nAtoms1 );
 							mmdb.GetAtomTable    ( jmod+1 ,icha ,ires , atoms_T2, nAtoms2 );
-							if( nAtoms1 == nAtoms2 ) { // MIGHT BE WATER
+							if( nAtoms1 == nAtoms2 ) { 
 								// HERE WE CALCULATE
 								for (iat = 0; iat<nAtoms1 ; iat++ ) {
 									double dx  = atoms_T1[iat]->x - atoms_T2[iat]->x;
@@ -604,23 +614,30 @@ int main ( int argc, char ** argv ) {
 	std::cout << "===========================================" << std::endl;
 	double tot_cnt=0.0;
 	std::vector<int> vimnr;
-	while( s_time < gen_time ) {
-		s_time+=dt;
-		gsl_matrix_get_row( row , S , I0 );
-		do {	I 		= floor(distribution(generator)*dModels);
-			dice_roll 	= 	distribution(generator);
-		} while( gsl_vector_get(row,I) < dice_roll );
-		vimnr.push_back(I);
-		if(verbose>=1)
-			std::cout << " T: \t " << I0 << " \t -> \t " << I << " \t time "<< s_time << std::endl;
-		I0=I;
-		stationary_dist[I][0] += 1.0;
-		tot_cnt+=1.0;
+	if(!bLin){
+		while( s_time < gen_time ) {
+			s_time+=dt;
+			gsl_matrix_get_row( row , S , I0 );
+			do {	I 		= floor(distribution(generator)*dModels);
+				dice_roll 	= 	distribution(generator);
+			} while( gsl_vector_get(row,I) < dice_roll );
+			vimnr.push_back(I);
+			if(verbose>=1)
+				std::cout << " T: \t " << I0 << " \t -> \t " << I << " \t time "<< s_time << std::endl;
+			I0=I;
+			stationary_dist[I][0] += 1.0;
+			tot_cnt+=1.0;
+		}
+	}else{
+		for(int i=0;i<nModels;i++) {
+			vimnr.push_back(i);
+			stationary_dist[i][0] += 1.0; // uniform -> average over all r
+		}
 	}
 
 	if( v_set[5] || v_set[4] ) {
 		// NOTE THAT THE FIRST FRAME IS SENT TO PDB FOR TOPOLOGY
-		write_atoms_to_xtc( cell , &mmdb , run_args.second[5] , run_args.second[4] , vimnr , 0 );
+		write_atoms_to_xtc( cell , &mmdb , run_args.second[5] , run_args.second[4] , vimnr , 0 , dt );
 	}
 
 	double X1 = 0.0;
@@ -707,9 +724,10 @@ int main ( int argc, char ** argv ) {
 	}
 
 	if( v_set[1] ) {
-	// FINALLY BUILD THE END MODEL
-	// WRITTEN IN A REDUNDANT WAY
-	// STAT OUTP IO
+		// FINALLY BUILD THE END MODEL
+		// WRITTEN IN A REDUNDANT WAY
+		// STAT OUTP IO
+
 		PPCModel	model_tmp;
 		int Nmods;
 		mmdb.GetModelTable( model_tmp , Nmods );
