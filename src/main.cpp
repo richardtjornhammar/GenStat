@@ -25,6 +25,10 @@
 #include "xdrfile/xdrfile_trr.h"
 #include "xdrfile/xdrfile_xtc.h"
 
+//	BOOST
+#include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/split.hpp>
+
 void output_matrix( gsl_matrix * );
 //
 //	SIZE OF D IS 10E-11 to 10E-10 m2/s FOR BIOMOLECULES
@@ -37,7 +41,176 @@ void output_matrix( gsl_matrix * );
 
 // COMPILE:: g++ -std=c++11 main.cpp -lmmdb -lgsl -lblas -o rich_dyn
 // WXTC	  :: g++ -std=c++11 src/*.cpp -lmmdb -lgsl -lblas -lxdrfile -o rich_dyn
+// ALL	  :: g++ -std=c++11 src/*.cpp -lmmdb -lgsl -lblas -lxdrfile -lclipper-core -lclipper-contrib -lclipper-ccp4 -lclipper-phs -o rich_dyn
 
+class residue_info {
+	public:
+		residue_info( ){ bSet_ = false; };
+		std::string get_rname(void){ return rname_; };
+		void	set_rname(std::string rname) {rname_=rname;};
+		char get_shortCode(void){ return shortCode_; };
+		void set_shortCode( char sc ) { shortCode_=sc;};
+		~residue_info(){ };
+	private:
+		bool		 bSet_;
+		std::string	rname_;
+		std::string	chain_, occ_, bfac_, rvec_;
+		int 		 iord_, rsize_;
+		char 		shortCode_;
+};
+
+class residue_props : residue_info {
+	public:
+		residue_props( ){ bSet_ = false; };
+		void alloc_all( int );
+		void dealloc_all();
+		~residue_props(){ if(bSet_){dealloc_all();} };
+	private:
+		bool		 bSet_;
+		double		q_;
+		double		eu1_,eu2_;
+		gsl_vector	*mu_ ,*S_, *t_;
+		gsl_matrix	*theta_;
+		gsl_vector	*sigma_;
+		gsl_matrix	*U_  ,*V_ ;
+		gsl_vector	*occ_,*Bf_;
+		gsl_matrix	*Rall_;
+};
+
+void
+residue_props::alloc_all( int N ) {
+	int D=3;
+	theta_	= gsl_matrix_calloc(D,D);
+	sigma_	= gsl_vector_calloc(D*D*D);
+	U_	= gsl_matrix_calloc(D,N);
+	V_	= gsl_matrix_calloc(D,D);
+	Rall_	= gsl_matrix_calloc(D,N);
+	S_	= gsl_vector_calloc(D);
+	t_	= gsl_vector_calloc(D);
+	mu_	= gsl_vector_calloc(D);
+	Bf_	= gsl_vector_calloc(N);
+	occ_	= gsl_vector_calloc(N);
+}
+
+void
+residue_props::dealloc_all() {
+	gsl_matrix_free( theta_	);
+	gsl_vector_free( sigma_	);
+	gsl_matrix_free( U_	);
+	gsl_matrix_free( V_	);
+	gsl_matrix_free( Rall_	);
+	gsl_vector_free( S_	);
+	gsl_vector_free( t_	);
+	gsl_vector_free( mu_	);
+	gsl_vector_free( Bf_	);
+	gsl_vector_free( occ_	);
+}
+
+char
+res_str2chr(std::string reswrd ) { 
+	char resChr='-';
+	int Ncodes		= 43;
+	const char *vs1[]	= {	"---","ala","asn","asp","arg","cys","gln",
+					"glu","gly","his","ile","leu","lys","met",
+					"pro","phe","ser","thr","trp","tyr","val",
+					"unk","ALA","ASN","ASP","ARG","CYS","GLN",
+					"GLU","GLY","HIS","ILE","LEU","LYS","MET",
+					"PRO","PHE","SER","THR","TRP","TYR","VAL",
+					"UNK" };
+	const char *vc1		= "-andrcqeghilkmpfstwyvxANDRCQEGHILKMPFSTWYVX";
+	int j;
+	for( j=0; j<Ncodes ; j++ ) {
+		std::string tmp( vs1[j] );
+		std::size_t found3 = reswrd.find( tmp );
+		if(found3 != std::string::npos) {
+			resChr=vc1[j];
+			break;
+		}
+	}
+	return resChr;
+}
+
+int
+get_sequence(std::string seq_ifi , std::vector<std::string>& vs , int verbose ) {
+	const char *vs1[]	= {	"---","ala","asn","asp","arg","cys","gln",
+					"glu","gly","his","ile","leu","lys","met",
+					"pro","phe","ser","thr","trp","tyr","val",
+					"unk","ALA","ASN","ASP","ARG","CYS","GLN",
+					"GLU","GLY","HIS","ILE","LEU","LYS","MET",
+					"PRO","PHE","SER","THR","TRP","TYR","VAL",
+					"UNK" };
+	int Ncodes		= 43;
+	const char *vc1		= "-andrcqeghilkmpfstwyvxANDRCQEGHILKMPFSTWYVX";
+	std::ifstream inputf;
+	inputf.open(seq_ifi.c_str());
+	if (inputf.is_open()) {
+		std::string line;
+		int rcnt=0;
+		int il=0, ncnt=10, ccnt=0;
+		std::string chn_str;
+		while ( getline ( inputf,line ) ) {
+			std::string search_for("ATOM");
+			std::size_t found = line.find(search_for);
+			if ( found != std::string::npos ) {
+				std::string search_ca("CA");
+				std::size_t found2 = line.find(search_ca);
+				if( found2 == std::string::npos)
+					continue;
+				std::vector< std::string > wrds;
+				boost::split( wrds, line, boost::is_any_of(" ") );
+				int bHit = 0;
+				int I = 0, J = 0;
+				char A = line[21];
+				int ccct = (int) (A-'A') ;
+				for( int i=0; i<wrds.size() ; i++ )  {
+					for(int j=0; j<Ncodes ; j++) {
+						if(bHit==1)
+							continue;
+						std::string tmp(vs1[j]);
+						std::size_t found3 = wrds[i].find(tmp);
+						if(found3 != std::string::npos) {
+							if( (wrds[i].size() >3 && wrds[i][0]=='A')
+							 || (wrds[i].size()==3) ) {
+								bHit=1;
+								I=i;
+								J=j;
+							}
+						}
+					}
+				}
+
+				if( bHit == 1 ) {
+					rcnt++;
+					if( ccct-ccnt==1 ) {
+						ccnt=ccct;
+						il=0;
+						vs.push_back(chn_str);
+						chn_str.clear();
+					}
+					if( il >= ncnt ) {
+						chn_str.append(" ");
+						il=1;
+					} else {
+						il++;
+					}
+					std::stringstream ss;
+					ss << vc1[J];
+					chn_str.append(ss.str());
+				}
+			}
+		}
+		vs.push_back(chn_str);
+                inputf.close();
+//		FINAL IO
+		if( verbose>0 ) {
+			std::cout << "> ; multiplicity=" << 1 << "; \t size=" << rcnt << std::endl;
+			std::cout << std::endl << std::endl <<  "> ; multiplicity=" << 1 << "; \t size=" << rcnt << std::endl;
+			for(int i=0;i<vs.size();i++)
+				std::cout << vs[i] << std::endl << std::endl;
+		}
+	}
+	return 0;
+}
 
 std::pair< int , std::vector< std::string > >
 argparser( std::pair < int, char ** > mp, std::vector<int>& v_set, 
@@ -132,10 +305,10 @@ void write_atoms_to_xtc( gsl_matrix *cell , CMMDBManager *mmdb , std::string fpn
 	int selHnd	= mmdb->NewSelection();
 	int nAtoms	= 0;
 	PPCAtom cur_atoms;
-
+//
 //	HERE BUILD A NEW MMDB MANAGER 
 //	AND OUTPUT FIRST FRAME TO PDB 
-
+//
 	CMMDBManager	mmdb_single; 
 	PPCModel	model;
 	int nModels;
@@ -411,7 +584,9 @@ int main ( int argc, char ** argv ) {
 	vipss.first=0;	vipss.second.first	= "-linear";
 			vipss.second.second	= "0";
 	opts_n_defaults.push_back(vipss);
-
+	vipss.first=0;	vipss.second.first	= "-no_traj";
+			vipss.second.second	= "0";
+	opts_n_defaults.push_back(vipss);
 	// test_xtc();
 	if(argc<2)
 		fatal("NOT ENOUGH ARGUMENTS");
@@ -432,10 +607,11 @@ int main ( int argc, char ** argv ) {
 	}else{
 		dt	= 1.0E-12;				// TRAJECTORY TIMESTEP
 	}
-	bool bLin=false;
-	if(v_set[7])
+	bool bLin=false; int be_kind_rewind=0;
+	if(v_set[7]){
 		bLin=true;
-
+		be_kind_rewind = atoi( run_args.second[7].c_str() );
+	}
 	double gen_time	= atof(run_args.second[2].c_str())*dt;
 	std::cout << "INFO:: WILL MIMIC SIMULATION TIME OF "<< gen_time*1E12 << " [ ps ] " << std::endl;
 	verbose		= atoi(run_args.second[3].c_str());
@@ -498,8 +674,14 @@ int main ( int argc, char ** argv ) {
 	// NOTE EACH MATRIX ROW IS A CELL VECTOR I IS ROW, J IS COLUMN. SEE OUTPUT
 	output_matrix(cell);
 
+	if(v_set[7]) {
+		std::cout << "ALTERNATIVE GENERATION" << std::endl;
+		return 0;
+	}
+
 	double gnrm	= 1.0/sqrt(2.0*M_PI);
-	double l_jump	= 0.15E-9;	// JUMP DIFFUSION LENGTH OF PENTANE ( TYPICALLY 1-3 Å )
+	double l_jump	= 0.15E-9;		// JUMP DIFFUSION 
+						// LENGTH OF PENTANE ( TYPICALLY 1-3 Å )
 
 	double stationary_dist[nModels][2];
 	for ( imod=0 ; imod<nModels ; imod++ ) {
@@ -633,6 +815,9 @@ int main ( int argc, char ** argv ) {
 			vimnr.push_back(i);
 			stationary_dist[i][0] += 1.0; // uniform -> average over all r
 		}
+		if(be_kind_rewind>1)
+			for(int i=nModels-1;i>=0;i--)
+				vimnr.push_back(i);
 	}
 
 	if( v_set[5] || v_set[4] ) {
@@ -644,14 +829,14 @@ int main ( int argc, char ** argv ) {
 	double X2 = 0.0;
 	double tot_sum = 0.0;
 	for( int i=0 ; i<nModels ; i++ ) {
-		double val = stationary_dist[i][0]/tot_cnt;
-		X1 += val;
-		X2 += val*val;
+		double val 	= stationary_dist[i][0]/tot_cnt;
+		X1 		+= val;
+		X2 		+= val*val;
 		stationary_dist[i][1] = val;
 		tot_sum+=stationary_dist[i][1];
 	//	std::cout << " @ " << i << " " << val << std::endl;
 	}
-	double fModels = nModels;
+	double fModels	= nModels;
 	std::cout	<< "INFO:: IDEAL:: " << 1/fModels << " MEAN " << X1/fModels 
 			<< " STD " << sqrt((X2-X1*X1/fModels)/fModels) << " MSTATS" << std::endl;
 	std::cout	<< "INFO:: SUM:: " << tot_sum << std::endl;
@@ -727,7 +912,6 @@ int main ( int argc, char ** argv ) {
 		// FINALLY BUILD THE END MODEL
 		// WRITTEN IN A REDUNDANT WAY
 		// STAT OUTP IO
-
 		PPCModel	model_tmp;
 		int Nmods;
 		mmdb.GetModelTable( model_tmp , Nmods );
