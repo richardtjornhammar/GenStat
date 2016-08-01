@@ -674,15 +674,18 @@ int main ( int argc, char ** argv ) {
 	// NOTE EACH MATRIX ROW IS A CELL VECTOR I IS ROW, J IS COLUMN. SEE OUTPUT
 	output_matrix(cell);
 
-	if(v_set[7]) {
+	if( v_set[8] ) {
 		std::cout << "ALTERNATIVE GENERATION" << std::endl;
+		mmdb.GetAtomTable ( 1 , 0 , 0  , atoms_T2 , nAtoms2 );
+		mmdb.GetResidueTable ( 1 , 0, resid_T2 , nResidues2 );
+		std::cout << "GOT " << nAtoms2 << " ATOMS" << std::endl;
+		std::cout << "BELONGING TO RESIDUE " << resid_T2[0]->name << " (" << res_str2chr(resid_T2[0]->name)<< ") " << std::endl;
 		return 0;
 	}
 
 	double gnrm	= 1.0/sqrt(2.0*M_PI);
 	double l_jump	= 0.15E-9;		// JUMP DIFFUSION 
 						// LENGTH OF PENTANE ( TYPICALLY 1-3 Å )
-
 	double stationary_dist[nModels][2];
 	for ( imod=0 ; imod<nModels ; imod++ ) {
 		stationary_dist  [imod][0] = 0.0;
