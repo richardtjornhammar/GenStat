@@ -50,7 +50,9 @@ class periodic_table {
 	public:
 		periodic_table(){};
 		int get_z(std::string zname);
-		std::string get_zname(int Z);
+		std::string get_zname( int Z );
+		float get_arad_pm( int );
+		float get_arad_nm( int );
 	private:
 		const char *regname_[112] = {
 	"XY","H ","He","Li","Be","B ","C ","N ","O ","F ","Ne","Na","Mg",
@@ -73,7 +75,7 @@ class periodic_table {
 	"PA","U" ,"NP","PU","AM","CM","BK","CF","ES","FM","MD","NO","LR",
 	"RF","DB","SG","BH","HS","MT","DS","RG" };
 		const int Nats_=112;
-		float aradi_pm[112]={
+		float aradi_pm_[112]={
 	  -1,  37,  32, 134,  90,  82,  77,  75,  73,  71,  69, 154, 130,
 	 118, 111, 106, 102,  99,  97, 196, 174, 144, 136, 125, 127, 139,
 	 125, 126, 121, 138, 131, 126, 122, 119, 116, 114, 110, 211, 192,
@@ -84,7 +86,7 @@ class periodic_table {
 	  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,
 	  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1 };
 	//	float wdv_radi_pm[120]={};
-		float aweight[112]={ //check these
+		float aweight_[112]={ //check these
 	0, 1.00794, 4.002602, 6.941, 9.012182, 10.811, 12.0107, 14.0067 ,
 	15.9994 , 18.9984032, 20.1797, 22.98976928, 24.3050, 26.9815386,  28.0855 , 30.973762 ,
 	32.065, 35.453, 39.948, 39.0983, 40.078, 44.955912, 47.867, 50.9415,
@@ -101,7 +103,7 @@ class periodic_table {
 	259, 262, 267, 268, 271, 272, 270, 276, 
 //	281, 280, 285, 284, 289, 288, 293, 294,
 	 };
-		float eneg[120]={
+		float eneg_[112]={
 	0.00, 2.20, 0.00, 0.98, 1.57, 2.04, 2.55, 3.00, 3.44, 3.98, 0.00, 0.93, 1.31,
 	1.61, 1.90, 2.19, 2.58, 3.16, 0.00, 0.82, 1.00, 1.36, 1.54, 1.63, 1.66, 1.55,
 	1.83, 1.88, 1.91, 1.90, 1.65, 1.81, 2.01, 2.18, 2.55, 2.96, 0.00, 0.82, 0.95,
@@ -148,6 +150,16 @@ periodic_table::get_zname(int Z) {
 	return (sname);
 }
 
+float 
+periodic_table::get_arad_pm(int Z) {
+	return (aradi_pm_[Z]);
+}
+
+float
+periodic_table::get_arad_nm(int Z) {
+	return (aradi_pm_[Z]*1.0E-3);
+}
+
 class residue_info {
 	public:
 		residue_info( ){ bSet_ = false; };
@@ -173,7 +185,7 @@ class residue_props : residue_info {
 		void assign_all( PPCAtom , int );
 		void dealloc_all();
 		void calc_moments();
-		void calc_fractional_charge();
+		void calc_fractional_charges();
 		~residue_props(){ if(bSet_){dealloc_all();} };
 	private:
 		bool		bSet_, bAssigned_, bMoments_;
@@ -206,7 +218,7 @@ residue_props::alloc_all( int N ) {
 
 void
 residue_props::assign_all( PPCAtom atoms, int N ) {
-	std::cout << " "<<DIM<<" HERE " << std::endl;
+	std::cout << " " << DIM << " HERE " << std::endl;
 
 	if(!bSet_){
 		theta_	= gsl_matrix_calloc(DIM,DIM);
@@ -290,7 +302,7 @@ residue_props::assign_all( PPCAtom atoms, int N ) {
 		}	
 		std::cout << std::endl;
 	}
-
+	calc_fractional_charges();
 }	
 
 void
@@ -316,17 +328,30 @@ residue_props::calc_moments() {
 }
 
 void
-residue_props::calc_fractional_charge(){
+residue_props::calc_fractional_charges(){
 	if(bAssigned_){
+		periodic_table pt;
 		std::vector<std::vector<int>> ivec_n;
 		gsl_vector *r00 = gsl_vector_calloc(DIM);
 		gsl_vector *r01 = gsl_vector_calloc(DIM);
 		// CALCULATE FRACTIONAL CHARGES
-		for(int i=0;i<N_;i++){ // a q look all n
-			gsl_matrix_get_row(r00,Rall_,i);
+		for(int i=0;i<N_;i++){ // a q for all n
+			gsl_matrix_get_col(r00,Rall_,i);
+			int	z0	= gsl_vector_get(Z_,i);
+			float	a0	= pt.get_arad_nm( z0 );
+			std::cout << "INFO:: " << i << " \t ";
 			for(int j=0;j<N_;j++) {
-				;
+				if(i==j)
+					continue;
+				gsl_matrix_get_col( r01 , Rall_ , j );
+				int	z1	= gsl_vector_get(Z_,j);
+				float	a1	= pt.get_arad_nm( z1 );
+				gsl_vector_sub( r01, r00 );
+				double nd = gsl_blas_dnrm2( r01 )*1.0e-1; // BECAUSE AA
+				if( nd<(a0+a1) )
+					std::cout << " " << j;
 			}
+			std::cout << " |   " << z0 << std::endl;
 		}
 		gsl_vector_free(r00);
 		gsl_vector_free(r01);
