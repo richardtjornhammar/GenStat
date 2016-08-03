@@ -38,10 +38,115 @@ void output_matrix( gsl_matrix * );
 #define KBOL	1.38064889E-23		//	m2 kg s-2 K-1
 #define RGAS	8.31446210		//	J K−1 mol−1
 #define NAVO	6.022140857E23		//
+#define RX	0
+#define RY	1
+#define RZ	2
 
 // COMPILE:: g++ -std=c++11 main.cpp -lmmdb -lgsl -lblas -o rich_dyn
 // WXTC	  :: g++ -std=c++11 src/*.cpp -lmmdb -lgsl -lblas -lxdrfile -o rich_dyn
 // ALL	  :: g++ -std=c++11 src/*.cpp -lmmdb -lgsl -lblas -lxdrfile -lclipper-core -lclipper-contrib -lclipper-ccp4 -lclipper-phs -o rich_dyn
+
+class periodic_table {
+	public:
+		periodic_table(){};
+		int get_z(std::string zname);
+		std::string get_zname(int Z);
+	private:
+		const char *regname_[112] = {
+	"XY","H ","He","Li","Be","B ","C ","N ","O ","F ","Ne","Na","Mg",
+	"Al","Si","P ","S ","Cl","Ar","K ","Ca","Sc","Ti","V ","Cr","Mn",
+	"Fe","Co","Ni","Cu","Zn","Ga","Ge","As","Se","Br","Kr","Rb","Sr",
+	"Y ","Zr","Nb","Mo","Tc","Ru","Rh","Pd","Ag","Cd","In","Sn","Sb",
+	"Te","I ","Xe","Cs","Ba","La","Ce","Pr","Nd","Pm","Sm","Eu","Gd",
+	"Tb","Dy","Ho","Er","Tm","Yb","Lu","Hf","Ta","W ","Re","Os","Ir",
+	"Pt","Au","Hg","Tl","Pb","Bi","Po","At","Rn","Fr","Ra","Ac","Th",
+	"Pa","U ","Np","Pu","Am","Cm","Bk","Cf","Es","Fm","Md","No","Lr",
+	"Rf","Db","Sg","Bh","Hs","Mt","Ds","Rg" };
+		const char *name_[112] = {
+	"XY","H" ,"HE","LI","BE","B" ,"C" ,"N" ,"O" ,"F" ,"NE","NA","MG",
+ 	"AL","SI","P" ,"S" ,"CL","AR","K" ,"CA","SC","TI","V" ,"CR","MN",
+	"FE","CO","NI","CU","ZN","GA","GE","AS","SE","BR","KR","RB","SR",
+	"Y" ,"ZR","NB","MO","TC","RU","RH","PD","AG","CD","IN","SN","SB",
+	"TE","I" ,"XE","CS","BA","LA","CE","PR","ND","PM","SM","EU","GD",
+	"TB","DY","HO","ER","TM","YB","LU","HF","TA","W ","RE","OS","IR",
+	"PT","AU","HG","TL","PB","BI","PO","AT","RN","FR","RA","AC","TH",
+	"PA","U" ,"NP","PU","AM","CM","BK","CF","ES","FM","MD","NO","LR",
+	"RF","DB","SG","BH","HS","MT","DS","RG" };
+		const int Nats_=112;
+		float aradi_pm[112]={
+	  -1,  37,  32, 134,  90,  82,  77,  75,  73,  71,  69, 154, 130,
+	 118, 111, 106, 102,  99,  97, 196, 174, 144, 136, 125, 127, 139,
+	 125, 126, 121, 138, 131, 126, 122, 119, 116, 114, 110, 211, 192,
+	 162, 148, 137, 145, 156, 126, 135, 131, 153, 148, 144, 141, 138,
+	 135, 133, 130, 225, 198, 169,  -1,  -1,  -1,  -1,  -1,  -1,  -1,
+	  -1,  -1,  -1,  -1,  -1,  -1, 160, 150, 138, 146, 159, 128, 137,
+	 128, 144, 149, 148, 147, 146,  -1,  -1, 145,  -1,  -1,  -1,  -1,
+	  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,
+	  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1 };
+	//	float wdv_radi_pm[120]={};
+		float aweight[112]={ //check these
+	0, 1.00794, 4.002602, 6.941, 9.012182, 10.811, 12.0107, 14.0067 ,
+	15.9994 , 18.9984032, 20.1797, 22.98976928, 24.3050, 26.9815386,  28.0855 , 30.973762 ,
+	32.065, 35.453, 39.948, 39.0983, 40.078, 44.955912, 47.867, 50.9415,
+	51.9961, 54.938045, 55.845, 58.933195, 58.6934, 63.546, 65.38, 69.723 ,
+	72.64, 74.92160, 78.96, 79.904, 83.798, 85.4678, 87.62, 88.90585,
+	91.224, 92.90638, 95.96, 98, 101.07, 102.90550, 106.42, 107.8682,
+	112.411, 114.818, 118.710, 121.760, 127.60, 126.90447, 131.293,
+	132.9054519, 137.327, 138.90547, 140.116, 140.90765, 144.242, 145 ,
+ 	150.36, 151.964, 157.25, 158.92535, 162.500, 164.93032, 167.259, 168.93421 ,
+	173.054, 174.9668, 178.49, 180.94788, 183.84, 186.207, 190.23, 192.217 ,
+ 	195.084, 196.966569, 200.59, 204.3833, 207.2, 208.98040,  209,  210 ,
+	222, 223, 226, 227, 232.03806, 231.03588, 238.02891, 237 ,
+	244, 243, 247, 247, 251, 252, 257, 258,
+	259, 262, 267, 268, 271, 272, 270, 276, 
+//	281, 280, 285, 284, 289, 288, 293, 294,
+	 };
+		float eneg[120]={
+	0.00, 2.20, 0.00, 0.98, 1.57, 2.04, 2.55, 3.00, 3.44, 3.98, 0.00, 0.93, 1.31,
+	1.61, 1.90, 2.19, 2.58, 3.16, 0.00, 0.82, 1.00, 1.36, 1.54, 1.63, 1.66, 1.55,
+	1.83, 1.88, 1.91, 1.90, 1.65, 1.81, 2.01, 2.18, 2.55, 2.96, 0.00, 0.82, 0.95,
+	1.22, 1.33, 1.60, 2.16, 1.90, 2.20, 2.28, 2.20, 1.93, 1.69, 1.78, 1.96, 2.05,
+	2.10, 2.66, 0.00, 0.79, 0.89, 1.10, 1.12, 1.13, 1.14, 1.13, 1.17, 1.20, 1.20,
+	1.20, 1.22, 1.23, 1.24, 1.25, 1.10, 1.27, 1.30, 1.50, 2.36, 1.90, 2.20, 2.20,
+	2.28, 2.54, 2.00, 2.04, 2.33, 2.02, 2.00, 2.20, 0.00, 0.70, 0.90, 1.10, 1.30,
+	1.50, 1.38, 1.36, 1.28, 1.30, 1.30, 1.30, 1.30, 1.30, 1.30, 1.30, 1.30, 1.30,
+	0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00	};
+};
+
+int
+periodic_table::get_z( std::string zname ) {
+
+	std::string::size_type found = zname.find(" ");
+	if(found!=std::string::npos)
+		zname.erase(zname.begin()+found);
+	found = zname.find(" ");
+	if(found!=std::string::npos)
+		zname.erase(zname.begin()+found);
+	found=zname.find_first_of("0123456789");
+	if(found!=std::string::npos)
+		zname.erase(zname.begin()+found);
+	found=zname.find_first_of("0123456789");
+	if(found!=std::string::npos)
+		zname.erase(zname.begin()+found);
+
+	if( ! ( zname.size()==2 || zname.size()==1 ) )
+		return -1;
+	boost::to_upper(zname);
+	std::string s=zname;
+	int i=0,j=-1;
+	for(i=0;i<Nats_;i++) {
+		j=!(zname.compare(get_zname(i)))?i:j;
+	}
+	return j;
+}
+
+std::string 
+periodic_table::get_zname(int Z) {
+	std::stringstream ss;
+	ss << name_[Z];
+	std::string sname=ss.str();
+	return (sname);
+}
 
 class residue_info {
 	public:
@@ -61,15 +166,21 @@ class residue_info {
 
 class residue_props : residue_info {
 	public:
-		residue_props( ){ bSet_ = false; };
+		residue_props( ){ bSet_=false; bAssigned_=false;bMoments_=false; };
+		residue_props(std::string rn) { set_rname(rn); bSet_=false; bAssigned_=false; };
+		void set_rcode();
 		void alloc_all( int );
+		void assign_all( PPCAtom , int );
 		void dealloc_all();
+		void calc_moments();
+		void calc_fractional_charge();
 		~residue_props(){ if(bSet_){dealloc_all();} };
 	private:
-		bool		 bSet_;
-		double		q_;
+		bool		bSet_, bAssigned_, bMoments_;
+		double		Q_;
 		double		eu1_,eu2_;
-		gsl_vector	*mu_ ,*S_, *t_;
+		int 		N_;
+		gsl_vector	*mu_ ,*S_, *t_, *q_, *Z_;
 		gsl_matrix	*theta_;
 		gsl_vector	*sigma_;
 		gsl_matrix	*U_  ,*V_ ;
@@ -79,17 +190,152 @@ class residue_props : residue_info {
 
 void
 residue_props::alloc_all( int N ) {
-	int D=3;
-	theta_	= gsl_matrix_calloc(D,D);
-	sigma_	= gsl_vector_calloc(D*D*D);
-	U_	= gsl_matrix_calloc(D,N);
-	V_	= gsl_matrix_calloc(D,D);
-	Rall_	= gsl_matrix_calloc(D,N);
-	S_	= gsl_vector_calloc(D);
-	t_	= gsl_vector_calloc(D);
-	mu_	= gsl_vector_calloc(D);
+	theta_	= gsl_matrix_calloc(DIM,DIM);
+	sigma_	= gsl_vector_calloc(DIM*DIM*DIM);
+	U_	= gsl_matrix_calloc(DIM,N);
+	V_	= gsl_matrix_calloc(DIM,DIM);
+	Rall_	= gsl_matrix_calloc(DIM,N);
+	S_	= gsl_vector_calloc(DIM);
+	t_	= gsl_vector_calloc(DIM);
+	mu_	= gsl_vector_calloc(DIM);
 	Bf_	= gsl_vector_calloc(N);
 	occ_	= gsl_vector_calloc(N);
+	Z_	= gsl_vector_calloc(N);
+	bSet_=true;
+}
+
+void
+residue_props::assign_all( PPCAtom atoms, int N ) {
+	std::cout << " "<<DIM<<" HERE " << std::endl;
+
+	if(!bSet_){
+		theta_	= gsl_matrix_calloc(DIM,DIM);
+		sigma_	= gsl_vector_calloc(DIM*DIM*DIM);
+		U_	= gsl_matrix_calloc(DIM,N);
+		V_	= gsl_matrix_calloc(DIM,DIM);
+		Rall_	= gsl_matrix_calloc(DIM,N);
+		S_	= gsl_vector_calloc(DIM);
+		t_	= gsl_vector_calloc(DIM);
+		mu_	= gsl_vector_calloc(DIM);
+		Bf_	= gsl_vector_calloc(N);
+		occ_	= gsl_vector_calloc(N);
+		Z_	= gsl_vector_calloc(N);
+		q_	= gsl_vector_calloc(N);
+		Q_	= 0.0;
+	}else{ 
+		if(N!=Bf_->size){ //RESET
+			dealloc_all();
+			theta_	= gsl_matrix_calloc(DIM,DIM);
+			sigma_	= gsl_vector_calloc(DIM*DIM*DIM);
+			U_	= gsl_matrix_calloc(DIM,N);
+			V_	= gsl_matrix_calloc(DIM,DIM);
+			Rall_	= gsl_matrix_calloc(DIM,N);
+			S_	= gsl_vector_calloc(DIM);
+			t_	= gsl_vector_calloc(DIM);
+			mu_	= gsl_vector_calloc(DIM);
+			Bf_	= gsl_vector_calloc(N);
+			Z_	= gsl_vector_calloc(N);
+			occ_	= gsl_vector_calloc(N);
+			q_	= gsl_vector_calloc(N);
+			Q_	= 0.0;
+		}
+	}
+	std::cout << "HERE" << std::endl;
+	periodic_table ainf;
+//more /usr/local/xtal/include/mmdb2/mmdb_atom.h
+	int qzchoice=0;
+	for( int i=0 ; i<N ; i++ ) {
+		std::stringstream ss;
+		ss << atoms[i]->element;
+		std::string astr(ss.str());
+		float	qt = 0.0;
+		int	Z  = ainf.get_z(astr);
+		gsl_vector_set(Z_,i,Z);
+		switch(qzchoice){
+			case 1:	 qt = (float)Z; break;
+			case 0:  qt = atoms[i]->charge; break;
+			default: qt = atoms[i]->charge;
+		}
+//	ASSIGNING VALUES
+		gsl_matrix_set(Rall_,RX,i,atoms[i]->x);gsl_matrix_set(Rall_,RY,i,atoms[i]->y);gsl_matrix_set(Rall_,RZ,i,atoms[i]->z);
+		gsl_vector_set(q_,i,qt);
+		Q_+=ainf.get_z(astr); // atoms[i]->charge
+	}
+	N_=N;
+	bAssigned_=true;
+
+	calc_moments();
+
+	int verbose = 1;
+	if( verbose ) {
+		std::cout << "\nINFO::\tMU::";
+		for( int j=0 ; j<DIM ; j++ ) {
+			std::cout << " " << gsl_vector_get ( mu_, j );
+		}
+		std::cout << "\nINFO::\tQU::\n";
+		for( int j=0 ; j<DIM ; j++ ) {
+			for( int k=0 ; k<DIM ; k++ ) {
+				std::cout << " " << gsl_matrix_get ( theta_,j,k );
+			}
+			std::cout << std::endl;
+		}	
+		std::cout << "\nINFO::\tOC::\n";
+		for( int j=0 ; j<DIM ; j++ ) {
+			for( int k=0 ; k<DIM ; k++ ) {
+				for( int l=0 ; l<DIM ; l++ ) {
+					std::cout << " " << gsl_vector_get (sigma_,j+k*DIM+l*DIM*DIM);
+				}
+			}
+			std::cout << std::endl;
+		}	
+		std::cout << std::endl;
+	}
+
+}	
+
+void
+residue_props::calc_moments() {
+	// ALL IS GOOD
+	for( int i=0;i<N_;i++) {
+		double r[DIM];
+		r[RX]=gsl_matrix_get(Rall_,RX,i);
+		r[RY]=gsl_matrix_get(Rall_,RY,i);
+		r[RZ]=gsl_matrix_get(Rall_,RZ,i);
+		double ql=gsl_vector_get(q_,i)-Q_;
+		for( int j=0 ; j<DIM ; j++ ) {
+			gsl_vector_set (mu_,j, ql*r[j]);
+			for( int k=0 ; k<DIM ; k++ ) {
+				gsl_matrix_set (theta_,j,k, ql*r[j]*r[k]);
+				for( int l=0 ; l<DIM ; l++ ) {
+					gsl_vector_set (sigma_,j+k*DIM+l*DIM*DIM, ql*r[j]*r[k]*r[l]);
+				}
+			}
+		}
+	}
+	bMoments_=true;
+}
+
+void
+residue_props::calc_fractional_charge(){
+	if(bAssigned_){
+		std::vector<std::vector<int>> ivec_n;
+		gsl_vector *r00 = gsl_vector_calloc(DIM);
+		gsl_vector *r01 = gsl_vector_calloc(DIM);
+		// CALCULATE FRACTIONAL CHARGES
+		for(int i=0;i<N_;i++){ // a q look all n
+			gsl_matrix_get_row(r00,Rall_,i);
+			for(int j=0;j<N_;j++) {
+				;
+			}
+		}
+		gsl_vector_free(r00);
+		gsl_vector_free(r01);
+		// WE GOT EVERYTHING BUT NEW CHARGE SO:
+		// NEED TO RECALC
+		calc_moments();
+	}else{
+		std::cout << "WARNING::NEED TO ASSIGN MATRICES!\n";
+	}
 }
 
 void
@@ -659,29 +905,34 @@ int main ( int argc, char ** argv ) {
 
 	mmdb.GetModelTable( model_T, nModels );
 	std::cout << "INFO:: HAVE " << nModels << " MODELS" << std::endl;
-	if(nModels <= 1 )
+	if(nModels <= 1 && !v_set[8] )
 		fatal("NO PDB CONTAINS TO FEW MODELS");
-
-	int nErr=0;
-	
-	gsl_matrix *M = gsl_matrix_calloc(nModels,nModels); // MSD
-	gsl_matrix *W = gsl_matrix_calloc(nModels,nModels); // WEIGTHS
-	gsl_matrix *P = gsl_matrix_calloc(nModels,nModels); // PROB
-	gsl_matrix *S = gsl_matrix_calloc(nModels,nModels); // CUMULATIVE SUM
-
-	gsl_matrix *cell = gsl_matrix_calloc(DIM,DIM);
-	calc_cell_matrix( cell , &mmdb );
-	// NOTE EACH MATRIX ROW IS A CELL VECTOR I IS ROW, J IS COLUMN. SEE OUTPUT
-	output_matrix(cell);
 
 	if( v_set[8] ) {
 		std::cout << "ALTERNATIVE GENERATION" << std::endl;
 		mmdb.GetAtomTable ( 1 , 0 , 0  , atoms_T2 , nAtoms2 );
 		mmdb.GetResidueTable ( 1 , 0, resid_T2 , nResidues2 );
 		std::cout << "GOT " << nAtoms2 << " ATOMS" << std::endl;
-		std::cout << "BELONGING TO RESIDUE " << resid_T2[0]->name << " (" << res_str2chr(resid_T2[0]->name)<< ") " << std::endl;
-		return 0;
+		char sc	= res_str2chr(resid_T2[0]->name);
+		std::cout << "BELONGING TO RESIDUE " << resid_T2[0]->name << " (" << sc << ") " << std::endl;
+		if(sc=='-')
+			std::cout << "WHICH IS AN UNKNOWN MONOMERE" << std::endl;
+		std::string zn("zn");
+		residue_props rp(resid_T2[0]->name);
+		rp.assign_all( atoms_T2 , nAtoms2 );
+		std::cout << " #####" << nAtoms2 << std::endl;
+		exit(0);
 	}
+
+	int nErr=0;	
+	gsl_matrix *cell = gsl_matrix_calloc(DIM,DIM);
+	calc_cell_matrix( cell , &mmdb );
+	output_matrix(cell);
+
+	gsl_matrix *M = gsl_matrix_calloc(nModels,nModels); // MSD
+	gsl_matrix *W = gsl_matrix_calloc(nModels,nModels); // WEIGTHS
+	gsl_matrix *P = gsl_matrix_calloc(nModels,nModels); // PROB
+	gsl_matrix *S = gsl_matrix_calloc(nModels,nModels); // CUMULATIVE SUM
 
 	double gnrm	= 1.0/sqrt(2.0*M_PI);
 	double l_jump	= 0.15E-9;		// JUMP DIFFUSION 
