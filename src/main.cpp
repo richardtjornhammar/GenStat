@@ -86,7 +86,7 @@ class periodic_table {
 	  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,
 	  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1 };
 	//	float wdv_radi_pm[120]={};
-		float aweight_[112]={ //check these
+		float aweight_[112]={ 
 	0, 1.00794, 4.002602, 6.941, 9.012182, 10.811, 12.0107, 14.0067 ,
 	15.9994 , 18.9984032, 20.1797, 22.98976928, 24.3050, 26.9815386,  28.0855 , 30.973762 ,
 	32.065, 35.453, 39.948, 39.0983, 40.078, 44.955912, 47.867, 50.9415,
@@ -125,42 +125,11 @@ class periodic_table {
 	"[Xe] 4f9 6s2", "[Xe] 4f10 6s2", "[Xe] 4f11 6s2", "[Xe] 4f12 6s2", "[Xe] 4f13 6s2", "[Xe] 4f14 6s2", "[Xe] 4f14 5d1 6s2", "[Xe] 4f14 5d2 6s2",
 	"[Xe] 4f14 5d3 6s2", "[Xe] 4f14 5d4 6s2", "[Xe] 4f14 5d5 6s2", "[Xe] 4f14 5d6 6s2", "[Xe] 4f14 5d7 6s2", "[Xe] 4f14 5d9 6s1",
 	"[Xe] 4f14 5d10 6s1","[Xe] 4f14 5d10 6s2", "[Xe] 4f14 5d10 6s2 6p1", "[Xe] 4f14 5d10 6s2 6p2", "[Xe] 4f14 5d10 6s2 6p3", "[Xe] 4f14 5d10 6s2 6p4", 
-"[Xe] 4f14 5d10 6s2 6p5" 
-"[Xe] 4f14 5d10 6s2 6p6" 
-"[Rn] 7s1" 
-"[Rn] 7s2" 
-"[Rn] 6d1 7s2" 
-"[Rn] 6d2 7s2" 
-"[Rn] 5f2 6d1 7s2" 
-"[Rn] 5f3 6d1 7s2" 
-"[Rn] 5f4 6d1 7s2" 
-"[Rn] 5f6 7s2" 
-"[Rn] 5f7 7s2" 
-"[Rn] 5f7 6d1 7s2" 
-"[Rn] 5f9 7s2" 
-"[Rn] 5f10 7s2" 
-"[Rn] 5f11 7s2" 
-"[Rn] 5f12 7s2" 
-"[Rn] 5f13 7s2" 
-"[Rn] 5f14 7s2" 
-"[Rn] 5f14 7s2 7p1" 
-"[Rn] 5f14 6d2 7s2" 
-"[Rn] 5f14 6d3 7s2" 
-"[Rn] 5f14 6d4 7s2" 
-"[Rn] 5f14 6d5 7s2" 
-"[Rn] 5f14 6d6 7s2" 
-"[Rn] 5f14 6d7 7s2" 
-"[Rn] 5f14 6d9 7s1" 
-"[Rn] 5f14 6d10 7s1" 
-"[Rn] 5f14 6d10 7s2" 
-"[Rn] 5f14 6d10 7s2 7p1" 
-"[Rn] 5f14 6d10 7s2 7p2" 
-"[Rn] 5f14 6d10 7s2 7p3" 
-"[Rn] 5f14 6d10 7s2 7p4" 
-"[Rn] 5f14 6d10 7s2 7p5" 
-"[Rn] 5f14 6d10 7s2 7p6"  
-};
-
+	"[Xe] 4f14 5d10 6s2 6p5", "[Xe] 4f14 5d10 6s2 6p6", "[Rn] 7s1", "[Rn] 7s2" , "[Rn] 6d1 7s2" , "[Rn] 6d2 7s2", "[Rn] 5f2 6d1 7s2","[Rn] 5f3 6d1 7s2", 
+	"[Rn] 5f4 6d1 7s2", "[Rn] 5f6 7s2", "[Rn] 5f7 7s2", "[Rn] 5f7 6d1 7s2", "[Rn] 5f9 7s2", "[Rn] 5f10 7s2", "[Rn] 5f11 7s2", "[Rn] 5f12 7s2", "[Rn] 5f13 7s2", 
+	"[Rn] 5f14 7s2", "[Rn] 5f14 7s2 7p1", "[Rn] 5f14 6d2 7s2", "[Rn] 5f14 6d3 7s2", "[Rn] 5f14 6d4 7s2", "[Rn] 5f14 6d5 7s2", "[Rn] 5f14 6d6 7s2",
+	"[Rn] 5f14 6d7 7s2", "[Rn] 5f14 6d9 7s1", "[Rn] 5f14 6d10 7s1","[Rn] 5f14 6d10 7s2"}; // "[Rn] 5f14 6d10 7s2 7p1", "[Rn] 5f14 6d10 7s2 7p2", 
+//	"[Rn] 5f14 6d10 7s2 7p3", "[Rn] 5f14 6d10 7s2 7p4", "[Rn] 5f14 6d10 7s2 7p5", "[Rn] 5f14 6d10 7s2 7p6" };
 };
 
 int
@@ -196,6 +165,18 @@ periodic_table::get_zname(int Z) {
 	ss << name_[Z];
 	std::string sname=ss.str();
 	return (sname);
+}
+
+int
+calc_valence(int Z) {
+	int val[][6]={{2,2},{10,8},{18,8},{36,18},{54,18},{86,32}};
+	int i;
+	for(i=0;i<6;i++){
+		if(Z<val[i][0])
+			break;
+	}
+	int rc = val[i][0]-Z;
+	return rc;
 }
 
 float 
@@ -402,7 +383,7 @@ residue_props::calc_fractional_charges(){
 					vi.push_back(j);
 				}
 			}
-			std::cout << " |   " << z0 << std::endl;
+			std::cout << " |   " << z0 << " | " << calc_valence(z0) << std::endl;
 			ivec_n.push_back(vi);
 		}
 		gsl_vector_free(r00);
