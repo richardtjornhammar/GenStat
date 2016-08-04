@@ -26,6 +26,7 @@
 #include "xdrfile/xdrfile_xtc.h"
 
 //	BOOST
+#include <boost/range/algorithm.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/split.hpp>
 
@@ -51,8 +52,13 @@ class periodic_table {
 		periodic_table(){};
 		int get_z(std::string zname);
 		std::string get_zname( int Z );
-		float get_arad_pm( int );
-		float get_arad_nm( int );
+		int	get_valence( int );
+		float	get_arad_pm( int );
+		float	get_arad_nm( int );
+		float	get_eneg( int );
+		int	get_lone( int );
+		int	get_shell( int z ){return shell_[z];};
+		int	get_lconf( int z );
 	private:
 		const char *regname_[112] = {
 	"XY","H ","He","Li","Be","B ","C ","N ","O ","F ","Ne","Na","Mg",
@@ -113,6 +119,11 @@ class periodic_table {
 	2.28, 2.54, 2.00, 2.04, 2.33, 2.02, 2.00, 2.20, 0.00, 0.70, 0.90, 1.10, 1.30,
 	1.50, 1.38, 1.36, 1.28, 1.30, 1.30, 1.30, 1.30, 1.30, 1.30, 1.30, 1.30, 1.30,
 	0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00	};
+		int shell_[112] = {
+	0,1,2,1,2,3,4,5,6,7,8,1,2,3,4,5,6,7,8,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,
+	1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,
+	17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,
+	16,17,18,19,20,21,22,23,24,25 };
 		const char *conf_[112]={
 	"1s0", "1s1", "1s2","[He] 2s1","[He] 2s2","[He] 2s2 2p1","[He] 2s2 2p2","[He] 2s2 2p3", 
 	"[He] 2s2 2p4","[He] 2s2 2p5","[He] 2s2 2p6","[Ne] 3s1","[Ne] 3s2","[Ne] 3s2 3p1","[Ne] 3s2 3p2","[Ne] 3s2 3p3", 
@@ -131,6 +142,13 @@ class periodic_table {
 	"[Rn] 5f14 6d7 7s2", "[Rn] 5f14 6d9 7s1", "[Rn] 5f14 6d10 7s1","[Rn] 5f14 6d10 7s2"}; // "[Rn] 5f14 6d10 7s2 7p1", "[Rn] 5f14 6d10 7s2 7p2", 
 //	"[Rn] 5f14 6d10 7s2 7p3", "[Rn] 5f14 6d10 7s2 7p4", "[Rn] 5f14 6d10 7s2 7p5", "[Rn] 5f14 6d10 7s2 7p6" };
 };
+
+int
+periodic_table::get_lconf( int z ){
+	std::string conf(conf_[z]);
+	std::string::size_type found = conf.find_last_of("spfd");
+	return ( std::atoi(conf.substr(found+1).c_str()) );
+}
 
 int
 periodic_table::get_z( std::string zname ) {
@@ -168,7 +186,7 @@ periodic_table::get_zname(int Z) {
 }
 
 int
-calc_valence(int Z) {
+periodic_table::get_valence(int Z) {
 	int val[][6]={{2,2},{10,8},{18,8},{36,18},{54,18},{86,32}};
 	int i;
 	for(i=0;i<6;i++){
@@ -179,9 +197,19 @@ calc_valence(int Z) {
 	return rc;
 }
 
+int
+periodic_table::get_lone(int Z) {
+	;
+}
+
 float 
 periodic_table::get_arad_pm(int Z) {
 	return (aradi_pm_[Z]);
+}
+
+float 
+periodic_table::get_eneg(int Z) {
+	return (eneg_[Z]);
 }
 
 float
@@ -361,6 +389,7 @@ residue_props::calc_fractional_charges(){
 	if(bAssigned_){
 		periodic_table pt;
 		std::vector<std::vector<int>> ivec_n;
+		std::vector<std::vector<int>> ivec_z;
 		gsl_vector *r00 = gsl_vector_calloc(DIM);
 		gsl_vector *r01 = gsl_vector_calloc(DIM);
 		// CALCULATE FRACTIONAL CHARGES
@@ -369,7 +398,7 @@ residue_props::calc_fractional_charges(){
 			int	z0	= gsl_vector_get(Z_,i);
 			float	a0	= pt.get_arad_nm( z0 );
 			std::cout << "INFO:: " << i << " \t ";
-			std::vector<int> vi;
+			std::vector<int> vi,viz;
 			for(int j=0;j<N_;j++) {
 				if(i==j)
 					continue;
@@ -380,11 +409,42 @@ residue_props::calc_fractional_charges(){
 				double nd = gsl_blas_dnrm2( r01 )*1.0e-1; // BECAUSE AA
 				if( nd<(a0+a1) ){
 					std::cout << " " << j;
-					vi.push_back(j);
+					vi.push_back(j); viz.push_back(z1);
 				}
 			}
-			std::cout << " |   " << z0 << " | " << calc_valence(z0) << std::endl;
-			ivec_n.push_back(vi);
+			int n_v=pt.get_valence(z0), n_b=viz.size(), n_s=pt.get_shell(z0);
+			if(n_v != n_b)
+				std::cout << " [ XB or A or Lone ] ";
+			std::cout << " { " << z0 << " } " << n_v ;
+		//BELOW IS PROBLEMATIC AND UNSOLVED (bogus)
+			int n_c	= pt.get_lconf(z0);
+			int n_u	= ( n_v-n_b );
+			int n_l	= 0;
+			std::cout << " <" << n_c << "> " << n_v - n_b ;
+			float xi  = pt.get_eneg(z0);
+			std::vector<float> multb;
+			for(int j=0;j<n_b;j++)
+				multb.push_back(pt.get_eneg(viz[j]));
+			boost::sort(multb);
+			if(multb[0]<xi)
+				n_l=n_u;
+		//LATER 
+			for(int j=0;j<n_b;j++) {
+				if(multb[j]<xi)
+					;	
+			}
+			
+		// final
+			float qc  = ((float)( n_v - n_l ));
+			for(int j=0;j<n_b;j++){
+				float xi1=pt.get_eneg(viz[j]);
+				float xi0=pt.get_eneg(z0);
+				qc-=xi1/(xi1+xi0)*multb[j];
+			}
+			std::cout << " | " << qc << std::endl;
+
+			ivec_n.push_back( vi );
+			ivec_z.push_back(viz );
 		}
 		gsl_vector_free(r00);
 		gsl_vector_free(r01);
