@@ -711,24 +711,25 @@ connectivity(gsl_matrix *B, ftyp val, int verbose ) {
 }
 
 int 
-calc_distance_matrix_models( CMMDBManager *mmdb, int ich, int ire ) {
+calc_distance_matrix_models( CMMDBManager *mmdb, int ich, int ire , CMMDBManager *mmdb0 ) {
+	int	verbose = 0;
+	PPCAtom		atoms1, atoms2;
+	PPCResidue	cur_res;
+	PPCModel	model;
+	int	nModels, nResidues;
 
-	int verbose = 0;
-
-	PPCAtom			atoms1	, atoms2;
-	int			nModels	;
-	PPCModel		model;
-	mmdb -> GetModelTable ( model , nModels );
-	int 			nAtoms1	, nAtoms2;
+	mmdb -> GetModelTable	( model , nModels );
+	mmdb -> GetResidueTable ( 1, ich, cur_res, nResidues );
+	int 		nAtoms1	, nAtoms2;
 	gsl_matrix *A	= gsl_matrix_alloc( nModels, nModels );
 	gsl_matrix *B	= gsl_matrix_alloc( nModels, nModels );
 
-	gvec 	*r1	= gsl_vector_alloc( DIM );
-	gvec 	*r2 	= gsl_vector_alloc( DIM );
-	int 	D	= A ->size2;
+	gvec	*r1	= gsl_vector_alloc( DIM );
+	gvec	*r2 	= gsl_vector_alloc( DIM );
+	int	D	= A ->size2;
 	ftyp 	xmin, x2min, X, X2, len2=0.0, slen=0.0;
 	for( int i=0 ; i<D ; i++ ) {
-		xmin = 1E10;x2min = 1E20;
+		xmin = 1E10; x2min = 1E20;
 		for( int j=0 ; j<D ; j++ ) {
 
 			len2 = 0.0;
@@ -736,7 +737,7 @@ calc_distance_matrix_models( CMMDBManager *mmdb, int ich, int ire ) {
 
 			mmdb -> GetAtomTable	( i+1 , ich, ire , atoms1, nAtoms1 );
 			mmdb -> GetAtomTable	( j+1 , ich, ire , atoms2, nAtoms2 );
-			if(nAtoms1!=nAtoms2 || res_str2chr( atoms1[0]->residue->name ) =='-')
+			if(nAtoms1!=nAtoms2 || res_str2chr( atoms1[0]->residue->name ) == '-' )
 				die("BAD MOJO");
 			for(int k=0;k<nAtoms1;k++){
 				ftyp dx = (atoms1[k]->x-atoms2[k]->x);
@@ -760,34 +761,54 @@ calc_distance_matrix_models( CMMDBManager *mmdb, int ich, int ire ) {
 	if(verbose)
 		std::cout <<  " INFO:: <" << X/n << "> " << ma << " ][ "<< mi ;
 	//outp_distance_matrix( A, maxbond*maxbond );
-	int nbins	= 40;
-	ftyp dm		= (ma2-mi2)/((float)(nbins-1));
+	int nbins = 40;
+	ftyp dm	  = (ma2-mi2)/((float)(nbins-1));
 	if(verbose)
 		std::cout << " " << dm << " "<< mi2 << std::endl;
 	std::vector<int> numc;
+	int nr=0;
 	for(int i=0;i<nbins;i++){
 		ftyp val 		= mi2+i*dm;
 		numc	= connectivity( A, val , 0 );
-		int nr=numc[numc.size()-1];
-		if(nr==2)
+		nr	= numc[numc.size()-1];
+		if(nr<4)
 			break;
 		std::cout << "## \t " << val << " " << nr << std::endl; 
 	}
-	//assign_via_distmatrix(A);
-	for(int i=0;i<nModels;i++){
-		int cid = numc[ 2*i ];
-		int aid = numc[2*i+1];
-		std::cout << " #@ " << cid << " " << aid << std::endl; 
+	nr--;
+
+	while(nr>0) {
+		for(int i=0;i<nModels;i++) {
+			int cid = numc[ 2*i ];
+			int mid = numc[2*i+1]+1;			
+
+			if(nr==cid) {
+				std::cout << " @@ " << nr << " | " << cid << " " << mid << std::endl;
+				mmdb -> GetResidueTable ( mid, ich, cur_res, nResidues );
+				std::cout << "INFO  " << nResidues << " " << ire << " " << mid << " " << cid << std::endl;
+				if(ire>=nResidues)
+					fatal("BAD RES");
+				// copy it here check data consistency at some point...
+				mmdb0-> AddResidue( 1, ich , cur_res[ire] );
+				nr--;
+				break;
+			}
+			std::cout << " #@ " << cid << " " << mid << std::endl; 
+		}
 	}
+
 /*
+//	LATER AND BETTER SOLUTION :: CURRENT IS A DIRTY FIX
 average over cluster parts if msd from aligned single part
 is smaller than tolerance then ok else too coarse grained so
 reduce cluster distance cutoff and redo
 start with few go to many
 */
-	gsl_matrix_free( A  );
-	gsl_vector_free( r1 );
-	gsl_vector_free( r2 );
+//	gsl_matrix_free( A  );
+//	gsl_vector_free( r1 );
+//	gsl_vector_free( r2 ); 
+
+	std::cout << "\nDONE\n" << std::endl;
 
 	return 0;
 }
@@ -1300,12 +1321,17 @@ int main ( int argc, char ** argv ) {
 	int		imod,jmod,icha,ires,iat;
 
 	mmdb.GetModelTable( model_T, nModels );
+
 	std::cout << "INFO:: HAVE " << nModels << " MODELS" << std::endl;
 	if(nModels <= 1 && !v_set[8] )
 		fatal("NO PDB CONTAINS TO FEW MODELS");
 
-	calc_distance_matrix_models( &mmdb, 0, 0 );
-
+	if(nModels>1){
+		CMMDBManager   mmdb0(mmdb);
+		mmdb0.DeleteAllModels();
+		calc_distance_matrix_models( &mmdb, 0, 0, &mmdb0 );
+		int rval	= mmdb0.WritePDBASCII( "wohoo.pdb" );
+	}
 	if( v_set[8] ) 
 		if( atoi(run_args.second[8].c_str()) > 0 ) {
 			std::cout << "ALTERNATIVE GENERATION" << std::endl;
