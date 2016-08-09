@@ -43,9 +43,36 @@ void output_matrix( gsl_matrix * );
 #define RY	1
 #define RZ	2
 
+typedef double ftyp;
+typedef gsl_matrix gmat;
+typedef gsl_vector gvec;
+
 // COMPILE:: g++ -std=c++11 main.cpp -lmmdb -lgsl -lblas -o rich_dyn
 // WXTC	  :: g++ -std=c++11 src/*.cpp -lmmdb -lgsl -lblas -lxdrfile -o rich_dyn
 // ALL	  :: g++ -std=c++11 src/*.cpp -lmmdb -lgsl -lblas -lxdrfile -lclipper-core -lclipper-contrib -lclipper-ccp4 -lclipper-phs -o rich_dyn
+
+void
+fatal(void){
+	std::string	author("Richard Tjörnhammar (e-mail: richard.tjornhammar@gmail.com)");
+	std::cout << "INFO:: PROGRAM FAILED" << std::endl;
+	std::cout << "PLEASE CONTACT " << author << "\nWITH ANY QUESTIONS REGARDING THE FUNCTIONALITY" << std::endl;
+	exit(1);
+}
+
+void
+fatal( std::string errstr ){
+	std::string	author("Richard Tjörnhammar (e-mail: richard.tjornhammar@gmail.com)");
+	std::cout << "INFO:: PROGRAM FAILED" << std::endl;
+	std::cout << "INFO:: " << errstr << std::endl;
+	std::cout << "PLEASE CONTACT " << author << "\nWITH ANY QUESTIONS REGARDING THE FUNCTIONALITY" << std::endl;
+	exit(1);
+}
+
+void
+die( std::string errstr ){
+	fatal(errstr);
+}
+
 
 class periodic_table {
 	public:
@@ -384,6 +411,10 @@ residue_props::calc_moments() {
 	bMoments_=true;
 }
 
+bool logic_fi( std::pair<float,int> i, std::pair<float,int> j) {
+    return i.first > j.first;
+}
+
 void
 residue_props::calc_fractional_charges(){
 	if(bAssigned_){
@@ -407,42 +438,55 @@ residue_props::calc_fractional_charges(){
 				float	a1	= pt.get_arad_nm( z1 );
 				gsl_vector_sub( r01, r00 );
 				double nd = gsl_blas_dnrm2( r01 )*1.0e-1; // BECAUSE AA
-				if( nd<(a0+a1) ){
+				if( nd<(a0+a1)*1.1 ){
 					std::cout << " " << j;
 					vi.push_back(j); viz.push_back(z1);
 				}
 			}
 			int n_v=pt.get_valence(z0), n_b=viz.size(), n_s=pt.get_shell(z0);
-			if(n_v != n_b)
-				std::cout << " [ XB or A or Lone ] ";
+			if(1)
+				std::cout << " ** "<< n_s-n_v <<" ** ";
+			int diffi=n_s-n_v;
 			std::cout << " { " << z0 << " } " << n_v ;
-		//BELOW IS PROBLEMATIC AND UNSOLVED (bogus)
-			int n_c	= pt.get_lconf(z0);
-			int n_u	= ( n_v-n_b );
-			int n_l	= 0;
-			std::cout << " <" << n_c << "> " << n_v - n_b ;
+		// BELOW IS PROBLEMATIC AND UNSOLVED (bogus)
+			int 	n_c	= pt.get_lconf(z0);
+			int 	n_u	= ( n_v-n_b );
+			float	s_u 	= ( n_u>=0 )?( 1.0 ):( -1.0 );
+			int	a_u	= s_u*n_u;
+			int 	n_l	= n_u;
+			std::cout << " <" << n_b << "> " << n_v - n_b << " " << a_u << " " << n_s;
 			float xi  = pt.get_eneg(z0);
-			std::vector<float> multb;
-			for(int j=0;j<n_b;j++)
-				multb.push_back(pt.get_eneg(viz[j]));
-			boost::sort(multb);
-			if(multb[0]<xi)
-				n_l=n_u;
-		//LATER 
-			for(int j=0;j<n_b;j++) {
-				if(multb[j]<xi)
-					;	
+			std::vector<std::pair<float,int>> multb;
+			for( int j=0;j<n_b;j++ ) {
+				multb.push_back(std::pair<float,int>( pt.get_eneg(viz[j]), j) );
 			}
-			
-		// final
-			float qc  = ((float)( n_v - n_l ));
-			for(int j=0;j<n_b;j++){
+			sort( multb.begin(), multb.end(), logic_fi );
+			for(int j=0;j<a_u;j++){
+				std::cout << " xixi " << xi << " " <<  multb[j].first << " ";
+				if( xi >  multb[j].first ) {
+					n_l+=s_u; a_u-=1.0;
+				}
+			//	if( xi <= multb[j].first && s_u < 0) {
+			//		n_l+=s_u; a_u-=1.0;
+			//	}
+			}
+			std::cout << " GOT MORE INFO " << a_u << " ";
+			std::vector<float> f_b;
+			for(int j=0;j<n_b;j++)
+				f_b.push_back(1.0);
+			for(int j=0;j<a_u;j++) {
+				f_b[multb[j].second]+=1.0;
+				//a_u--;
+			}
+		// FINAL STOPPED BEING BOGUS
+			float qc  = ((float)( n_v-n_l ));
+			for(int j=0;j<n_b;j++) {
 				float xi1=pt.get_eneg(viz[j]);
 				float xi0=pt.get_eneg(z0);
-				qc-=xi1/(xi1+xi0)*multb[j];
+				qc-=xi0/(xi1+xi0)*f_b[j];
+				//qc-=f_b[j];
 			}
 			std::cout << " | " << qc << std::endl;
-
 			ivec_n.push_back( vi );
 			ivec_z.push_back(viz );
 		}
@@ -492,6 +536,260 @@ res_str2chr(std::string reswrd ) {
 		}
 	}
 	return resChr;
+}
+
+
+std::vector<int>
+outp_distance_matrix( gmat *A, ftyp level ) {
+	int D = A->size1;
+	std::vector<int> vi;
+	if( A->size1 == A->size2 ) {
+		std::cout << " A(" << D << "," << D << ")=[" << std::endl; 
+		for(int i=0; i<D; i++){
+			ftyp sum=0,sumb=0;
+			for(int j=0;j<D;j++){
+				ftyp val=gsl_matrix_get(A,i,j);
+				ftyp valb=0;
+				if(level!=0) {
+					if(level>0) {
+						valb=val<level;
+					}else{
+						valb=val>sqrt(level*level);
+					}
+				}
+				if(valb>0)
+					std::cout << "\033[1;31m " << valb <<"\033[0m";
+				else
+					std::cout << " " << valb ;
+				val*=valb;
+				if(i!=j){
+					sum  += val;
+					sumb +=valb;
+				}
+			}
+			vi.push_back(sumb);
+			std::cout << " | " << sumb << " | " << sum << std::endl;
+		}
+		std::cout << "];" << std::endl;
+	}
+	return vi;
+}
+
+// clustering stuffs
+
+void output_nobel_matrix( gsl_matrix *mat ) {
+	std::cout << "\n[========================] " << std::endl;
+	std::cout << mat->size1 << std::endl;
+	std::cout << "NOBEL" << std::endl;
+	for(int i=0;i<mat->size1;i++) {
+		std::cout << " He ";
+		for(int j=0;j<mat->size2;j++) {
+			std::cout << " " << gsl_matrix_get(mat,i,j)*2.0;
+		}
+		std::cout << "\n";
+	}
+	std::cout << "[========================] " << std::endl;
+}
+	
+int
+assign_via_distmatrix( gmat *A ) {
+
+	int dspace	= DIM;
+	int N		= A->size1;
+	gsl_matrix *X	= gsl_matrix_calloc( N , dspace );
+	gsl_matrix *D	= gsl_matrix_calloc( N , N );
+	gsl_matrix *Y	= gsl_matrix_calloc( dspace, N );
+	gsl_vector *b   = gsl_vector_calloc( N );
+	gsl_vector_set_all( b , 1.0 );
+	gsl_matrix_memcpy(  D, A );
+	if(A->size1!=A->size2) {
+		fatal("INFO::ERROR::DIMENSIONS");
+	}
+
+	for(int i=0;i<N;i++)
+	{
+		for(int j=0;j<N;j++)
+		{
+			double dij	= gsl_matrix_get(D,i,j);
+			double dNj	= gsl_matrix_get(D,N-1,j);
+			double diN	= gsl_matrix_get(D,i,N-1);
+			double nDij	= (diN+dNj-dij)*0.5;
+			gsl_matrix_set ( D, i, j , nDij );
+		}
+	}
+	gsl_matrix *U	= gsl_matrix_alloc( N, N );
+	gsl_matrix *V	= gsl_matrix_alloc( N, N );
+	gsl_vector *S	= gsl_vector_alloc( N );
+	gsl_vector *wrk = gsl_vector_alloc( N );
+	gsl_linalg_SV_decomp ( D, V, S, wrk ); 		
+	gsl_matrix_memcpy(  U, D );
+	gsl_matrix *E	= gsl_matrix_calloc( N, dspace );
+	for(int i=0;i<dspace;i++)
+		gsl_matrix_set( E, i, i, sqrt(gsl_vector_get(S,i)) );
+		gsl_blas_dgemm (CblasNoTrans, CblasNoTrans,
+			1.0, U, E, 0.0, X );
+	gsl_matrix_transpose_memcpy( Y, X );
+
+	output_nobel_matrix(X);
+
+	gsl_matrix_free(X);
+	gsl_matrix_free(Y);
+	gsl_matrix_free(U);
+	gsl_matrix_free(V);
+	gsl_matrix_free(D);
+
+	return 0;
+}
+
+std::vector<int>
+connectivity(gsl_matrix *B, ftyp val, int verbose ) {
+	int i,j,k,q,N,C=0,min;
+
+	int nr_sq = B->size1;
+	if(B->size1!=B->size2)
+		die("FOO");
+
+	std::vector<int>	res;
+	std::vector<int>	nvisi;
+
+	std::vector<int>	s;
+	std::vector<int>	NN;
+	std::vector<int>	ndx;
+
+	N=nr_sq;
+	res.push_back(0);
+	for(i=0; i<N; i++ ){
+   		nvisi.push_back(i+1);
+		res.push_back(0);res.push_back(0);
+		ndx.push_back(i);
+	}
+
+	while(!ndx.empty()){
+		i=ndx.back(); ndx.pop_back(); 
+		NN.clear();
+		if(nvisi[i]>0){
+			C--;
+			for(j=0;j<N;j++){
+				if( gsl_matrix_get(B,j,i)<val==1 ) {
+					NN.push_back(j);
+				}
+			}
+			while(!NN.empty()){
+				k=NN.back(); NN.pop_back();
+				nvisi[k]=C;
+				for(j=0;j<N;j++){
+	   				if( gsl_matrix_get(B,j,k)<val==1 ){
+	     					for(q=0;q<N;q++){
+							if(nvisi[q]==j+1){
+								NN.push_back(q);
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+   	if(verbose)
+		std::cout <<"INFO " << C << "\ncluster data:\n";
+	std::vector<int> Nc; // NUMBER OF POINTS IN EACH CLUSTER
+	for(i=0;i<-1*C;i++)
+		Nc.push_back(0);
+
+	for(q=0;q<N;q++){
+		res[q*2+1]=q;
+		res[q*2]=nvisi[q]-C;
+		Nc[res[q*2]]++;
+		if(verbose)		// cluster_id		 part_id
+			std::cout << " " << res[q*2] << " " << res[2*q+1] << std::endl ;
+   	}
+	// HOW MANY IN EACH?
+	if(verbose)
+		for(i=0;i<-1*C;i++)
+			std::cout << "CLUSTER " << i << " HAS " << Nc[i] << " ELEMENTS" << std::endl ;
+	res.push_back(-1*C);
+	return  res;   
+}
+
+int 
+calc_distance_matrix_models( CMMDBManager *mmdb, int ich, int ire ) {
+
+	int verbose = 0;
+
+	PPCAtom			atoms1	, atoms2;
+	int			nModels	;
+	PPCModel		model;
+	mmdb -> GetModelTable ( model , nModels );
+	int 			nAtoms1	, nAtoms2;
+	gsl_matrix *A	= gsl_matrix_alloc( nModels, nModels );
+	gsl_matrix *B	= gsl_matrix_alloc( nModels, nModels );
+
+	gvec 	*r1	= gsl_vector_alloc( DIM );
+	gvec 	*r2 	= gsl_vector_alloc( DIM );
+	int 	D	= A ->size2;
+	ftyp 	xmin, x2min, X, X2, len2=0.0, slen=0.0;
+	for( int i=0 ; i<D ; i++ ) {
+		xmin = 1E10;x2min = 1E20;
+		for( int j=0 ; j<D ; j++ ) {
+
+			len2 = 0.0;
+			slen = 0.0;
+
+			mmdb -> GetAtomTable	( i+1 , ich, ire , atoms1, nAtoms1 );
+			mmdb -> GetAtomTable	( j+1 , ich, ire , atoms2, nAtoms2 );
+			if(nAtoms1!=nAtoms2 || res_str2chr( atoms1[0]->residue->name ) =='-')
+				die("BAD MOJO");
+			for(int k=0;k<nAtoms1;k++){
+				ftyp dx = (atoms1[k]->x-atoms2[k]->x);
+				ftyp dy = (atoms1[k]->y-atoms2[k]->y);
+				ftyp dz = (atoms1[k]->z-atoms2[k]->z);
+				len2 += dx*dx+dy*dy+dz*dz;
+			}
+			gsl_matrix_set( A , i, j, len2 );
+			gsl_matrix_set( B , i, j, sqrt(len2) );
+			if(i!=j && len2<x2min) {
+				xmin	= sqrt(len2);
+				x2min	= len2;
+			}
+		}
+		X += xmin; X2 += x2min;
+	}
+	ftyp n   = A ->size2;
+	ftyp ma  = X/n+4*sqrt( (X2-X*X/n)/n );
+	ftyp mi  = X/n-2*sqrt( (X2-X*X/n)/n );
+	ftyp ma2 = ma*ma, mi2 = mi*mi;
+	if(verbose)
+		std::cout <<  " INFO:: <" << X/n << "> " << ma << " ][ "<< mi ;
+	//outp_distance_matrix( A, maxbond*maxbond );
+	int nbins	= 40;
+	ftyp dm		= (ma2-mi2)/((float)(nbins-1));
+	if(verbose)
+		std::cout << " " << dm << " "<< mi2 << std::endl;
+	std::vector<int> numc;
+	for(int i=0;i<nbins;i++){
+		ftyp val 		= mi2+i*dm;
+		numc	= connectivity( A, val , 0 );
+		int nr=numc[numc.size()-1];
+		if(nr==2)
+			break;
+		std::cout << "## \t " << val << " " << nr << std::endl; 
+	}
+	//assign_via_distmatrix(A);
+	for(int i=0;i<nModels;i++){
+		int cid = numc[ 2*i ];
+		int aid = numc[2*i+1];
+		std::cout << " #@ " << cid << " " << aid << std::endl; 
+	}
+/*
+average over cluster parts if msd from aligned single part
+is smaller than tolerance then ok else too coarse grained so
+reduce cluster distance cutoff and redo
+start with few go to many
+*/
+	gsl_matrix_free( A  );
+	gsl_vector_free( r1 );
+	gsl_vector_free( r2 );
+
+	return 0;
 }
 
 int
@@ -632,27 +930,6 @@ argparser( std::pair < int, char ** > mp, std::vector<int>& v_set,
 	//v_set.swap( vis );
 	//std::cout << " " << v_set.size() << " " << vis.size() << std::endl;
 	return ret_args;
-}
-void
-fatal(void){
-	std::string	author("Richard Tjörnhammar (e-mail: richard.tjornhammar@gmail.com)");
-	std::cout << "INFO:: PROGRAM FAILED" << std::endl;
-	std::cout << "PLEASE CONTACT " << author << "\nWITH ANY QUESTIONS REGARDING THE FUNCTIONALITY" << std::endl;
-	exit(1);
-}
-
-void
-fatal( std::string errstr ){
-	std::string	author("Richard Tjörnhammar (e-mail: richard.tjornhammar@gmail.com)");
-	std::cout << "INFO:: PROGRAM FAILED" << std::endl;
-	std::cout << "INFO:: " << errstr << std::endl;
-	std::cout << "PLEASE CONTACT " << author << "\nWITH ANY QUESTIONS REGARDING THE FUNCTIONALITY" << std::endl;
-	exit(1);
-}
-
-void
-die( std::string errstr ){
-	fatal(errstr);
 }
 
 void write_atoms_to_xtc( gsl_matrix *cell , CMMDBManager *mmdb , std::string fpname , std::string ftname, std::vector<int> vimnr, int debug, double dt) 
@@ -880,6 +1157,7 @@ static void test_xtc()
 
 	printf("[ PASSED ]\n");
 }
+
 void output_matrix( gsl_matrix *mat) {
 	std::cout << "\n[========================] " << std::endl;
 	for(int i=0;i<mat->size1;i++) {
@@ -890,7 +1168,7 @@ void output_matrix( gsl_matrix *mat) {
 	}
 	std::cout << "[========================] " << std::endl;
 }
-	
+
 void calc_cell_matrix( gsl_matrix *cell , CMMDBManager   *mmdb ) {
 	if( !(cell->size1==DIM&&cell->size2==DIM) )
 		fatal();
@@ -1026,21 +1304,24 @@ int main ( int argc, char ** argv ) {
 	if(nModels <= 1 && !v_set[8] )
 		fatal("NO PDB CONTAINS TO FEW MODELS");
 
-	if( v_set[8] ) {
-		std::cout << "ALTERNATIVE GENERATION" << std::endl;
-		mmdb.GetAtomTable ( 1 , 0 , 0  , atoms_T2 , nAtoms2 );
-		mmdb.GetResidueTable ( 1 , 0, resid_T2 , nResidues2 );
-		std::cout << "GOT " << nAtoms2 << " ATOMS" << std::endl;
-		char sc	= res_str2chr(resid_T2[0]->name);
-		std::cout << "BELONGING TO RESIDUE " << resid_T2[0]->name << " (" << sc << ") " << std::endl;
-		if(sc=='-')
-			std::cout << "WHICH IS AN UNKNOWN MONOMERE" << std::endl;
-		std::string zn("zn");
-		residue_props rp(resid_T2[0]->name);
-		rp.assign_all( atoms_T2 , nAtoms2 );
-		std::cout << " #####" << nAtoms2 << std::endl;
-		exit(0);
-	}
+	calc_distance_matrix_models( &mmdb, 0, 0 );
+
+	if( v_set[8] ) 
+		if( atoi(run_args.second[8].c_str()) > 0 ) {
+			std::cout << "ALTERNATIVE GENERATION" << std::endl;
+			mmdb.GetAtomTable ( 1 , 0 , 0  , atoms_T2 , nAtoms2 );
+			mmdb.GetResidueTable ( 1 , 0, resid_T2 , nResidues2 );
+			std::cout << "GOT " << nAtoms2 << " ATOMS" << std::endl;
+			char sc	= res_str2chr(resid_T2[0]->name);
+			std::cout << "BELONGING TO RESIDUE " << resid_T2[0]->name << " (" << sc << ") " << std::endl;
+			if(sc=='-')
+				std::cout << "WHICH IS AN UNKNOWN MONOMERE" << std::endl;
+			std::string zn("zn");
+			residue_props rp(resid_T2[0]->name);
+			rp.assign_all( atoms_T2 , nAtoms2 );
+			std::cout << " ##### " << nAtoms2 << std::endl;
+			exit(0);
+		}
 
 	int nErr=0;	
 	gsl_matrix *cell = gsl_matrix_calloc(DIM,DIM);
@@ -1265,7 +1546,6 @@ int main ( int argc, char ** argv ) {
 			gsl_vector_set(rx2,0,x2);
 			gsl_vector_set(rx2,1,y2);
 			gsl_vector_set(rx2,2,z2);
-			
 			gsl_matrix_set_row( XM1, iatom, rx1 );
 			gsl_matrix_set_row( XM2, iatom, rx2 );
 		}
