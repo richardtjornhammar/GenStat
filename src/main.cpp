@@ -656,11 +656,12 @@ connectivity(gsl_matrix *B, ftyp val, int verbose ) {
 	std::vector<int>	NN;
 	std::vector<int>	ndx;
 
-	N=nr_sq;
+	N = nr_sq;
 	res.push_back(0);
 	for(i=0; i<N; i++ ){
    		nvisi.push_back(i+1);
-		res.push_back(0);res.push_back(0);
+		res.push_back(0);
+		res.push_back(0);
 		ndx.push_back(i);
 	}
 
@@ -699,8 +700,8 @@ connectivity(gsl_matrix *B, ftyp val, int verbose ) {
 		res[q*2+1]=q;
 		res[q*2]=nvisi[q]-C;
 		Nc[res[q*2]]++;
-		if(verbose)		// cluster_id		 part_id
-			std::cout << " " << res[q*2] << " " << res[2*q+1] << std::endl ;
+		if(verbose)				// cluster_id		part_id
+			std::cout << " " << q << " " << res[q*2] << " " << res[2*q+1] << std::endl ;
    	}
 	// HOW MANY IN EACH?
 	if(verbose)
@@ -721,24 +722,28 @@ calc_distance_matrix_models( CMMDBManager *mmdb, int ich, int ire , CMMDBManager
 	mmdb -> GetModelTable	( model , nModels );
 	mmdb -> GetResidueTable ( 1, ich, cur_res, nResidues );
 	int 		nAtoms1	, nAtoms2;
-	gsl_matrix *A	= gsl_matrix_alloc( nModels, nModels );
-	gsl_matrix *B	= gsl_matrix_alloc( nModels, nModels );
 
-	gvec	*r1	= gsl_vector_alloc( DIM );
-	gvec	*r2 	= gsl_vector_alloc( DIM );
+	gsl_matrix *A	= gsl_matrix_calloc( nModels, nModels );
+	gsl_matrix *B	= gsl_matrix_calloc( nModels, nModels );
+
+	gvec	*r1	= gsl_vector_calloc( DIM );
+	gvec	*r2 	= gsl_vector_calloc( DIM );
 	int	D	= A ->size2;
+	if(verbose)
+		std::cout << "INFO A :: " << D << " " << nModels << " " << std::endl;
+
 	ftyp 	xmin, x2min, X, X2, len2=0.0, slen=0.0;
 	for( int i=0 ; i<D ; i++ ) {
 		xmin = 1E10; x2min = 1E20;
 		for( int j=0 ; j<D ; j++ ) {
-
 			len2 = 0.0;
 			slen = 0.0;
-
 			mmdb -> GetAtomTable	( i+1 , ich, ire , atoms1, nAtoms1 );
 			mmdb -> GetAtomTable	( j+1 , ich, ire , atoms2, nAtoms2 );
-			if(nAtoms1!=nAtoms2 || res_str2chr( atoms1[0]->residue->name ) == '-' )
+			if( nAtoms1 != nAtoms2 )
 				die("BAD MOJO");
+			if( res_str2chr( atoms1[0]->residue->name ) == '-' )
+				return 0;
 			for(int k=0;k<nAtoms1;k++){
 				ftyp dx = (atoms1[k]->x-atoms2[k]->x);
 				ftyp dy = (atoms1[k]->y-atoms2[k]->y);
@@ -760,7 +765,6 @@ calc_distance_matrix_models( CMMDBManager *mmdb, int ich, int ire , CMMDBManager
 	ftyp ma2 = ma*ma, mi2 = mi*mi;
 	if(verbose)
 		std::cout <<  " INFO:: <" << X/n << "> " << ma << " ][ "<< mi ;
-	//outp_distance_matrix( A, maxbond*maxbond );
 	int nbins = 40;
 	ftyp dm	  = (ma2-mi2)/((float)(nbins-1));
 	if(verbose)
@@ -768,32 +772,32 @@ calc_distance_matrix_models( CMMDBManager *mmdb, int ich, int ire , CMMDBManager
 	std::vector<int> numc;
 	int nr=0;
 	for(int i=0;i<nbins;i++){
-		ftyp val 		= mi2+i*dm;
-		numc	= connectivity( A, val , 0 );
-		nr	= numc[numc.size()-1];
+		numc.clear();
+		ftyp val	= mi2+i*dm;
+		numc		= connectivity( A, val , 0 );
+		nr		= numc[numc.size()-1];
 		if(nr<4)
 			break;
-		std::cout << "## \t " << val << " " << nr << std::endl; 
 	}
 	nr--;
-
-	while(nr>0) {
+	while(nr>=0) {
 		for(int i=0;i<nModels;i++) {
 			int cid = numc[ 2*i ];
 			int mid = numc[2*i+1]+1;			
 
 			if(nr==cid) {
-				std::cout << " @@ " << nr << " | " << cid << " " << mid << std::endl;
+				// std::cout << " @@ " << nr << " | " << cid << " " << mid << std::endl;
 				mmdb -> GetResidueTable ( mid, ich, cur_res, nResidues );
-				std::cout << "INFO  " << nResidues << " " << ire << " " << mid << " " << cid << std::endl;
+				//std::cout << "INFO  <" << nResidues << "> " << ire << " " << mid << " " << cid << std::endl;
 				if(ire>=nResidues)
 					fatal("BAD RES");
 				// copy it here check data consistency at some point...
+				//std::cout << " @@ " << nr << " | " << cid << " " << mid << std::endl;
 				mmdb0-> AddResidue( 1, ich , cur_res[ire] );
 				nr--;
 				break;
 			}
-			std::cout << " #@ " << cid << " " << mid << std::endl; 
+			// std::cout << " #@ " << cid << " " << mid << std::endl; 
 		}
 	}
 
@@ -804,11 +808,9 @@ is smaller than tolerance then ok else too coarse grained so
 reduce cluster distance cutoff and redo
 start with few go to many
 */
-//	gsl_matrix_free( A  );
-//	gsl_vector_free( r1 );
-//	gsl_vector_free( r2 ); 
-
-	std::cout << "\nDONE\n" << std::endl;
+	gsl_matrix_free( A );	gsl_matrix_free( B );
+	gsl_vector_free( r1 );	gsl_vector_free( r2 ); 
+//	std::cout << "\nDONE\n" << std::endl;
 
 	return 0;
 }
@@ -1214,6 +1216,72 @@ void calc_cell_matrix( gsl_matrix *cell , CMMDBManager   *mmdb ) {
 	gsl_matrix_set(cell, 2, 2, sqrt( c*c*(1-cos(bet)*cos(bet)) - c21*c21 ) ); //check
 }
 
+void 
+make_single_model_i_manager(CMMDBManager *mmdb, CMMDBManager *mmdb0, int i ) {
+	int selHnd	= mmdb	->	NewSelection();
+	int nAtoms	= 0;
+	PPCAtom cur_atoms;
+
+	CMMDBManager	mmdb_single; 
+	PPCModel	model;
+	int nModels;
+
+	mmdb -> GetModelTable ( model , nModels );
+	double a, b, c, alf, bet, gam, cell_vol;
+	int ivol;
+
+	if (mmdb -> isCrystInfo( ) ) 
+		mmdb -> GetCell	( a , b , c , alf , bet , gam , cell_vol ,ivol );
+	if (mmdb -> isSpaceGroup() )  {
+		char *sg_str = mmdb	-> GetSpaceGroup();
+		int RC = mmdb0	-> SetSpaceGroup ( sg_str );
+	}
+
+	mmdb0 -> DeleteAllModels (  );
+	mmdb0 -> SetCell	( a , b , c , alf , bet , gam , ivol );
+	mmdb0 -> AddModel	( model[i] );
+}
+
+void 
+make_clear_manager(CMMDBManager *mmdb, CMMDBManager *mmdb0 ) {
+	int selHnd	= mmdb	->	NewSelection();
+	int nAtoms	= 0;
+	PPCAtom cur_atoms;
+
+	CMMDBManager	mmdb_single; 
+	PPCModel	model;
+	int nModels;
+
+	mmdb -> GetModelTable ( model , nModels );
+	double a, b, c, alf, bet, gam, cell_vol;
+	int ivol;
+
+	if (mmdb -> isCrystInfo( ) ) 
+		mmdb -> GetCell	( a , b , c , alf , bet , gam , cell_vol ,ivol );
+	if (mmdb -> isSpaceGroup() )  {
+		char *sg_str = mmdb	-> GetSpaceGroup();
+		int RC = mmdb0	-> SetSpaceGroup ( sg_str );
+	}
+
+	mmdb0 -> DeleteAllModels (  );
+	mmdb0 -> SetCell	( a , b , c , alf , bet , gam , ivol );
+}
+
+int
+count_all_nonwater_atoms(CMMDBManager *mmdb){
+	int selHnd0 = mmdb->NewSelection();
+	int nAtoms;
+	PPCAtom		cur_atoms;
+	mmdb->Select (	selHnd0    , STYPE_ATOM , 1 , "*",
+			ANY_RES    , "*" , ANY_RES,"*" ,
+			"*", "*"   , "*" , "*", SKEY_NEW );
+	mmdb->Select (	selHnd0    , STYPE_ATOM , 1 , "*",
+			ANY_RES    , "*" , ANY_RES ,"*" ,
+			"HOH", "*" , "*" , "*", SKEY_CLR );
+	mmdb->GetSelIndex ( selHnd0 , cur_atoms, nAtoms );
+	return nAtoms;
+}
+
 int main ( int argc, char ** argv ) {
 	int verbose = 0;
 //	PREPARING ARGPARSER
@@ -1327,10 +1395,20 @@ int main ( int argc, char ** argv ) {
 		fatal("NO PDB CONTAINS TO FEW MODELS");
 
 	if(nModels>1){
-		CMMDBManager   mmdb0(mmdb);
-		mmdb0.DeleteAllModels();
-		calc_distance_matrix_models( &mmdb, 0, 0, &mmdb0 );
+		CMMDBManager   mmdb0;
+		make_single_model_i_manager( &mmdb, &mmdb0, 1 );
+		std::cout << "GOT " << count_all_nonwater_atoms(&mmdb0) << " ATOMS" << std::endl;
+		int ncha = mmdb.GetNumberOfChains( 1 );
+		for ( icha = 0 ; icha < ncha ; icha++ ) {
+			std::cout <<"*";
+			int nres = mmdb.GetNumberOfResidues( 1 , icha );
+			for ( ires = 0 ; ires < nres ; ires++ ) {
+				std::cout <<"#";
+				calc_distance_matrix_models( &mmdb, icha, ires, &mmdb0 );
+			}
+		}
 		int rval	= mmdb0.WritePDBASCII( "wohoo.pdb" );
+		std::cout << "GOT " << count_all_nonwater_atoms(&mmdb0) << " ATOMS" << std::endl;
 	}
 	if( v_set[8] ) 
 		if( atoi(run_args.second[8].c_str()) > 0 ) {
